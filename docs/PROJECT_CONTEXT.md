@@ -16,6 +16,7 @@
 - 候補通知は `pre_race_candidates` として扱い、ログ反映とブラウザ起動制御だけを行う
 - 最終通知は `entry_tickets` として扱い、中央発注キューへ投入する
 - 公式サイト操作は、ログイン、場選択、レース選択、`BOAT.reg_service.addBet(...)`、確認画面、投票実行まで実装済み
+- 最終通知は `締切 HH:MM` から `tool_slot` を補完する（10時前は morning、18時前は daytime、18時以降は midnight）
 
 ## 中央投票サイトの認証項目
 

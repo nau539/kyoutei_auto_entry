@@ -317,6 +317,41 @@ class ServiceRoutingTests(unittest.TestCase):
         self.assertEqual(ticket.get("combo"), "3-1-2")
         self.assertEqual(ticket.get("bet_yen"), 500)
 
+    def test_entry_plain_text_sanrenpuku_extra_metrics_is_enqueued_for_daytime_slot(self):
+        self._set_channels(central=["100"], local=["200"], legacy=[])
+        settings = AppSettings()
+        settings.entry.enable_central = True
+        settings.entry.enable_local = False
+        settings.entry.plan_tier = "bronze"
+        settings.entry.tool_slots = ["daytime"]
+        logs = []
+        svc = AutoEntryService(settings, logs.append)
+
+        text = (
+            "[競艇通知] 宮島 12R\n"
+            "締切 16:46 / オッズ更新 16:45\n"
+            "方式 stable3f (学習 20210101 - 20251231)\n"
+            "3連複 1-3-4 conf=0.878 odds=3.30 ev=2.90\n"
+            "投資 3,100円 / 想定払戻 10,230円\n"
+            "上位確率 1=0.961 3=0.878 4=0.785 6=0.473"
+        )
+        svc._on_discord_message(
+            {
+                "content": text,
+                "channel_id": "100",
+                "parent_channel_id": "",
+            }
+        )
+
+        command, envelope = svc._queues[svc.TARGET_CENTRAL].get_nowait()
+        self.assertEqual(command, svc.CMD_PAYLOAD)
+        payload = envelope.get("payload") or {}
+        self.assertEqual(payload.get("tool_slot"), "daytime")
+        ticket = payload.get("tickets", [])[0]
+        self.assertEqual(ticket.get("market"), "3連複")
+        self.assertEqual(ticket.get("combo"), "1-3-4")
+        self.assertEqual(ticket.get("bet_yen"), 3100)
+
     def test_keirin_pre_race_candidates_is_skipped_by_sport_filter(self):
         self._set_channels(central=["100"], local=["200"], legacy=[])
         settings = AppSettings()

@@ -138,6 +138,7 @@ class PayloadParserTests(unittest.TestCase):
         self.assertEqual(rows[0]["tickets"][0]["combo"], "1-2")
         self.assertEqual(rows[0]["tickets"][0]["bet_yen"], 4200)
         self.assertAlmostEqual(float(rows[0]["tickets"][0]["odds"]), 2.4, places=2)
+        self.assertEqual(rows[0]["tool_slot"], "morning")
 
     def test_extract_kyoutei_entry_text_with_sanrenpuku(self):
         text = (
@@ -154,6 +155,29 @@ class PayloadParserTests(unittest.TestCase):
         self.assertEqual(rows[0]["tickets"][0]["market"], "三連複")
         self.assertEqual(rows[0]["tickets"][0]["combo"], "3-1-2")
         self.assertEqual(rows[0]["tickets"][0]["bet_yen"], 500)
+        self.assertEqual(rows[0]["tool_slot"], "morning")
+
+    def test_extract_kyoutei_entry_text_with_extra_metrics(self):
+        text = (
+            "[競艇通知] 宮島 12R\n"
+            "締切 16:46 / オッズ更新 16:45\n"
+            "方式 stable3f (学習 20210101 - 20251231)\n"
+            "3連複 1-3-4 conf=0.878 odds=3.30 ev=2.90\n"
+            "投資 3,100円 / 想定払戻 10,230円\n"
+            "上位確率 1=0.961 3=0.878 4=0.785 6=0.473"
+        )
+        rows = extract_payloads_from_text(text)
+        self.assertEqual(len(rows), 1)
+        self.assertEqual(rows[0]["message_type"], "entry_tickets")
+        self.assertEqual(rows[0]["race"]["venue_name"], "宮島")
+        self.assertEqual(rows[0]["race"]["race_num"], 12)
+        self.assertEqual(rows[0]["race"]["start_time"], f'{rows[0]["race"]["date"][:4]}-{rows[0]["race"]["date"][4:6]}-{rows[0]["race"]["date"][6:8]} 16:46:00')
+        self.assertEqual(rows[0]["strategy_name"], "stable3f (学習 20210101 - 20251231)")
+        self.assertEqual(rows[0]["tool_slot"], "daytime")
+        self.assertEqual(rows[0]["tickets"][0]["market"], "3連複")
+        self.assertEqual(rows[0]["tickets"][0]["combo"], "1-3-4")
+        self.assertEqual(rows[0]["tickets"][0]["bet_yen"], 3100)
+        self.assertAlmostEqual(float(rows[0]["tickets"][0]["odds"]), 3.3, places=2)
 
 
 if __name__ == "__main__":

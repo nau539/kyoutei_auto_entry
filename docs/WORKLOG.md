@@ -609,3 +609,14 @@
   - `python3 build_release.py --spec kyoutei_auto_entry.spec --clean --dry-run`
 - Open items:
   - 実機ログイン確認は未実施。三連複の実発注前に、最終確定OFFで確認画面まで進むことを1回確認したい。
+
+## 2026-05-03
+- Task: `ev` と上位確率付き三連複通知の受信確認
+- Summary: ユーザー提示の `[競艇通知] 宮島 12R` サンプルを実測し、`ev=2.90` と `上位確率 ...` は余分な情報として無視され、`3連複 1-3-4`、3,100円、オッズ3.3を抽出できることを確認した。受信枠を絞った商品版では `tool_slot` 空欄だと見送りになるため、最終通知の締切時刻から `morning/daytime/midnight` を補完するよう修正した。
+- Changed files: `payload_parser.py`, `tests/test_payload_parser.py`, `tests/test_service_routing.py`, `VERSION.txt`, `docs/CHANGELOG_CUSTOMER.md`, `docs/PROJECT_CONTEXT.md`, `docs/WORKLOG.md`, `docs/LEARNINGS.md`
+- Verification:
+  - `python3 -m unittest tests.test_payload_parser tests.test_service_routing`
+  - `python3 -m unittest tests.test_payload_parser tests.test_config tests.test_product_profile tests.test_ipat_playwright tests.test_service_routing`
+  - `python3 -m unittest discover -s tests -p 'test_*.py'`
+- Open items:
+  - 実機ログイン確認は未実施。日中枠選択時に該当通知が実ブラウザの確認画面まで進むことを確認したい。
