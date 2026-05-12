@@ -643,5 +643,6 @@
   - `python -m unittest discover -s tests -p test_ipat_playwright.py -q`
   - `python -m unittest discover -s tests -p "test_*.py" -q`
   - `wsl -d Ubuntu -- bash -lc "cd /home/user/src/kyoutei/kyoutei_auto_entry && python3 -m unittest discover -s tests -p 'test_*.py' -q"`
+  - `python build_release.py --spec kyoutei_auto_entry.spec --clean`
 - Open items:
   - Windows 実機で v0.3.20 の起動ログ後、候補連動の事前ログインが同じ証明書エラーで停止しないことを確認したい。
