@@ -226,6 +226,7 @@ class IpatPlaywrightExecutor:
         self._page = None
         self._local_dialog_handler_attached = False
         self._playwright_temp_dir = ""
+        self._ignore_https_errors = False
         self._last_debug_context: Dict[str, Any] = {}
 
     def _target_label(self) -> str:
@@ -953,12 +954,52 @@ class IpatPlaywrightExecutor:
         self._prepare_playwright_runtime_env()
         self._playwright = sync_playwright().start()
         self._browser = self._launch_browser()
-        self._context = self._browser.new_context()
+        self._context = self._new_browser_context()
         self._page = self._context.new_page()
         if self.target == "local":
             self._attach_local_dialog_handler()
         self._page.set_default_timeout(self._op_timeout_ms(minimum_ms=1000))
         return self._page
+
+    def _new_browser_context(self):
+        if self._ignore_https_errors:
+            return self._browser.new_context(ignore_https_errors=True)
+        return self._browser.new_context()
+
+    def _is_certificate_authority_error(self, exc: BaseException) -> bool:
+        return "ERR_CERT_AUTHORITY_INVALID" in str(exc or "")
+
+    def _recreate_page_ignoring_https_errors(self):
+        if self._browser is None:
+            raise IpatEntryError("ブラウザが未起動のため、証明書エラー再試行を実行できません。")
+        if not self._ignore_https_errors:
+            self._ignore_https_errors = True
+            self._emit("HTTPS証明書エラーを検知したため、証明書エラーを許可して再接続します")
+        if self._context is not None:
+            try:
+                self._context.close()
+            except Exception:
+                pass
+        self._page = None
+        self._context = None
+        self._local_dialog_handler_attached = False
+        self._context = self._new_browser_context()
+        self._page = self._context.new_page()
+        if self.target == "local":
+            self._attach_local_dialog_handler()
+        self._page.set_default_timeout(self._op_timeout_ms(minimum_ms=1000))
+        return self._page
+
+    def _goto(self, page, url: str, wait_until: str = "domcontentloaded"):
+        try:
+            page.goto(url, wait_until=wait_until)
+            return page
+        except Exception as exc:
+            if (not self._is_certificate_authority_error(exc)) or self._ignore_https_errors:
+                raise
+            retry_page = self._recreate_page_ignoring_https_errors()
+            retry_page.goto(url, wait_until=wait_until)
+            return retry_page
 
     def _attach_local_dialog_handler(self) -> None:
         if self._context is None or self._local_dialog_handler_attached:
@@ -999,6 +1040,7 @@ class IpatPlaywrightExecutor:
         self._browser = None
         self._playwright = None
         self._local_dialog_handler_attached = False
+        self._ignore_https_errors = False
 
     def _is_login_form_visible(self, page) -> bool:
         login_id = self._selector("login_id_input", "input[name='i']")
@@ -1129,7 +1171,7 @@ class IpatPlaywrightExecutor:
         if self._is_menu_ready(page):
             self._stabilize_post_login_view(page)
             self._dismiss_important_notice_if_present(page)
-            return
+            return page
 
         self._dismiss_important_notice_if_present(page)
 
@@ -1145,14 +1187,15 @@ class IpatPlaywrightExecutor:
                 timeout_ms=self._op_timeout_ms(),
                 poll_ms=150,
             ):
-                return
+                return page
 
         if not self._is_login_form_visible(page):
-            page.goto(login_url, wait_until="domcontentloaded")
-        self._login(page, login_url)
+            page = self._goto(page, login_url, wait_until="domcontentloaded")
+        page = self._login(page, login_url)
         self._stabilize_post_login_view(page)
         if not self._is_menu_ready(page):
             raise IpatEntryError(f"ログイン後の投票メニュー表示に失敗しました (url={getattr(page, 'url', '-')})")
+        return page
 
     def _is_local_login_form_visible(self, page) -> bool:
         member_number = self._selector("login_member_number_input", "#MEMBERNUMR")
@@ -1402,9 +1445,9 @@ class IpatPlaywrightExecutor:
             page.wait_for_timeout(120)
         raise IpatEntryError(f"SPAT4ログイン後の開催画面表示に失敗しました (url={getattr(page, 'url', '-')})")
 
-    def _login_local(self, page, login_url: str) -> None:
+    def _login_local(self, page, login_url: str):
         self._emit(f"ログインURLへアクセス: {login_url}")
-        page.goto(login_url, wait_until="domcontentloaded")
+        page = self._goto(page, login_url, wait_until="domcontentloaded")
 
         self._fill_any(
             page,
@@ -1426,6 +1469,7 @@ class IpatPlaywrightExecutor:
             timeout_ms=max(10000, self._op_timeout_ms(scale=4000)),
         )
         self._emit("SPAT4ログイン完了")
+        return page
 
     def _trigger_local_login(self, page) -> None:
         selectors = self._selector_candidates(
@@ -1492,24 +1536,24 @@ class IpatPlaywrightExecutor:
         except Exception:
             pass
 
-    def _ensure_logged_in_local(self, page, login_url: str) -> None:
+    def _ensure_logged_in_local(self, page, login_url: str):
         if self._dismiss_local_interrupts_if_present(page):
             self._wait_local_post_login_ready(
                 page,
                 timeout_ms=max(6000, self._op_timeout_ms(scale=2500)),
             )
-            return
+            return page
         if self._is_local_home_ready(page):
-            return
+            return page
         if not self._is_local_login_form_visible(page):
-            page.goto(login_url, wait_until="domcontentloaded")
+            page = self._goto(page, login_url, wait_until="domcontentloaded")
             if self._dismiss_local_interrupts_if_present(page):
                 self._wait_local_post_login_ready(
                     page,
                     timeout_ms=max(6000, self._op_timeout_ms(scale=2500)),
                 )
-                return
-        self._login_local(page, login_url)
+                return page
+        return self._login_local(page, login_url)
 
     def _local_refresh_info(self, page) -> bool:
         self._dismiss_local_interrupts_if_present(page)
@@ -1564,7 +1608,7 @@ class IpatPlaywrightExecutor:
         self._ensure_selectors_configured()
         login_url = self._validate_ipat_settings()
         page = self._ensure_page()
-        self._ensure_logged_in_local(page, login_url)
+        page = self._ensure_logged_in_local(page, login_url) or page
         debug_before = self._emit_local_notice_debug(page, "before_refresh")
         refreshed = self._local_refresh_info(page)
         if refreshed:
@@ -1614,10 +1658,10 @@ class IpatPlaywrightExecutor:
             }
 
         top_url = str(login_url or "").strip() or "https://keirin.jp/pc/top"
-        self._ensure_logged_in_keirin(page, top_url)
-        page.goto(top_url, wait_until="domcontentloaded")
+        page = self._ensure_logged_in_keirin(page, top_url) or page
+        page = self._goto(page, top_url, wait_until="domcontentloaded")
         if not self._is_keirin_logged_in(page):
-            self._ensure_logged_in_keirin(page, top_url)
+            page = self._ensure_logged_in_keirin(page, top_url) or page
         self._emit("KEIRIN.JP待機維持: TOPを更新しました")
         return {
             "ok": True,
@@ -1633,7 +1677,7 @@ class IpatPlaywrightExecutor:
         try:
             if self.target == "local":
                 self._emit("事前準備: SPAT4へログイン")
-                self._ensure_logged_in_local(page, login_url)
+                page = self._ensure_logged_in_local(page, login_url) or page
                 self._emit("事前準備完了: SPAT4開催画面で待機中")
             elif self._is_kyoutei_mode(login_url):
                 self._emit("事前準備: BOAT RACEへログイン")
@@ -1642,11 +1686,11 @@ class IpatPlaywrightExecutor:
                 self._emit("事前準備完了: 競艇TOP画面で待機中")
             elif self._is_keirin_mode(login_url):
                 self._emit("事前準備: KEIRIN.JPへログイン")
-                self._ensure_logged_in_keirin(page, login_url)
+                page = self._ensure_logged_in_keirin(page, login_url) or page
                 self._emit("事前準備完了: 競輪TOP画面で待機中")
             else:
                 self._emit("事前準備: 投票メニューまで遷移")
-                self._ensure_logged_in(page, login_url)
+                page = self._ensure_logged_in(page, login_url) or page
                 self._emit("事前準備完了: 通常投票開始前で待機中")
             return {
                 "ok": True,
@@ -1680,7 +1724,7 @@ class IpatPlaywrightExecutor:
         self._last_debug_context = {}
         try:
             if self.target == "local":
-                self._ensure_logged_in_local(page, login_url)
+                page = self._ensure_logged_in_local(page, login_url) or page
                 result = self._execute_local(page, payload, normalized, total_yen)
                 self._emit(f"発注処理完了 status={result.get('status')}")
                 return result
@@ -1691,14 +1735,14 @@ class IpatPlaywrightExecutor:
                 self._emit(f"発注処理完了 status={result.get('status')}")
                 return result
             if self._is_keirin_mode(login_url):
-                self._ensure_logged_in_keirin(page, login_url)
+                page = self._ensure_logged_in_keirin(page, login_url) or page
                 result = self._execute_keirin(page, payload, normalized, total_yen)
                 self._emit(f"発注処理完了 status={result.get('status')}")
                 return result
 
-            self._ensure_logged_in(page, login_url)
+            page = self._ensure_logged_in(page, login_url) or page
             self._emit("通常投票ページへ遷移")
-            self._move_vote_page(page)
+            page = self._move_vote_page(page) or page
             self._emit("場名・レース選択")
             self._select_course_and_race(page, payload)
             for row in normalized:
@@ -1872,7 +1916,7 @@ class IpatPlaywrightExecutor:
             self._page = active
             return active
 
-        page.goto(login_url, wait_until="domcontentloaded")
+        page = self._goto(page, login_url, wait_until="domcontentloaded")
         active = self._kyoutei_find_active_page(page)
         if active is not None:
             self._page = active
@@ -2225,17 +2269,17 @@ class IpatPlaywrightExecutor:
             return True
         return False
 
-    def _ensure_logged_in_keirin(self, page, login_url: str) -> None:
+    def _ensure_logged_in_keirin(self, page, login_url: str):
         if self._is_keirin_logged_in(page):
             self._emit("KEIRIN.JPログイン状態を確認済み")
-            return
+            return page
 
         self._emit(f"競輪ログインページへアクセス: {login_url}")
-        page.goto(login_url, wait_until="domcontentloaded")
+        page = self._goto(page, login_url, wait_until="domcontentloaded")
 
         if self._is_keirin_logged_in(page):
             self._emit("競輪ログイン状態を確認済み")
-            return
+            return page
 
         login_id_sel = self._selector("keirin_login_id_input", "#trtxtBallotID")
         password_sel = self._selector("keirin_login_password_input", "#trtxtBallotPW")
@@ -2272,6 +2316,7 @@ class IpatPlaywrightExecutor:
                 f"(url={getattr(page, 'url', '-')})"
             )
         self._emit("競輪ログイン成功")
+        return page
 
     def _keirin_wait_vote_page_ready(self, page) -> None:
         selectors = self._selector_list(
@@ -2546,7 +2591,7 @@ class IpatPlaywrightExecutor:
                 page.wait_for_timeout(120)
         login_url = str(getattr(self._ipat_settings, "login_url", "") or "").strip() or "https://keirin.jp/pc/top"
         try:
-            page.goto(login_url, wait_until="domcontentloaded")
+            page = self._goto(page, login_url, wait_until="domcontentloaded")
             if self._keirin_is_top_page(page):
                 return self._keirin_finalize_top_return(page)
             moved = self._wait_for_any_visible(
@@ -3203,7 +3248,7 @@ class IpatPlaywrightExecutor:
         if target_url:
             self._emit(f"地方オッズ投票遷移フォールバック: direct_goto={target_url}")
             try:
-                page.goto(target_url, wait_until="domcontentloaded")
+                page = self._goto(page, target_url, wait_until="domcontentloaded")
             except Exception:
                 pass
             if self._local_wait_for_any_visible(
@@ -3731,9 +3776,9 @@ class IpatPlaywrightExecutor:
             "total_yen": total_yen,
         }
 
-    def _login(self, page, login_url: str) -> None:
+    def _login(self, page, login_url: str):
         self._emit(f"ログインURLへアクセス: {login_url}")
-        page.goto(login_url, wait_until="domcontentloaded")
+        page = self._goto(page, login_url, wait_until="domcontentloaded")
 
         inet_id_sel = self._selector("inet_id_input")
         if inet_id_sel:
@@ -3758,15 +3803,16 @@ class IpatPlaywrightExecutor:
         )
         self._wait_post_login_ready(page)
         self._emit("加入者情報ログイン完了")
+        return page
 
-    def _move_vote_page(self, page) -> None:
+    def _move_vote_page(self, page):
         self._dismiss_important_notice_if_present(page)
 
         vote_url = self._selector("vote_page_url")
         if vote_url:
-            page.goto(vote_url, wait_until="domcontentloaded")
+            page = self._goto(page, vote_url, wait_until="domcontentloaded")
             self._dismiss_important_notice_if_present(page)
-            return
+            return page
 
         ready = self._wait_for_any_visible(
             page,
@@ -3804,6 +3850,7 @@ class IpatPlaywrightExecutor:
         self._emit("通常投票ボタン押下")
         self._dismiss_important_notice_if_present(page)
         self._pause_if_no_funds_dialog(page)
+        return page
 
     def _pause_if_no_funds_dialog(self, page) -> None:
         dialog_sel = self._selector("no_funds_dialog_selector", "div.dialog:has-text('投票の前に')")

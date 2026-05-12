@@ -258,6 +258,54 @@ class _FakePlaywright:
         self.chromium = chromium
 
 
+class _FakeGotoPage:
+    def __init__(self, results=None):
+        self._results = list(results or [])
+        self.goto_calls = []
+        self.default_timeout = None
+        self.url = "about:blank"
+
+    def goto(self, url, wait_until="domcontentloaded"):
+        self.goto_calls.append({"url": url, "wait_until": wait_until})
+        self.url = url
+        if not self._results:
+            return None
+        result = self._results.pop(0)
+        if isinstance(result, BaseException):
+            raise result
+        return result
+
+    def set_default_timeout(self, timeout_ms):
+        self.default_timeout = timeout_ms
+
+
+class _FakeBrowserContext:
+    def __init__(self, page):
+        self._page = page
+        self.closed = False
+
+    def new_page(self):
+        return self._page
+
+    def close(self):
+        self.closed = True
+
+
+class _FakeContextBrowser:
+    def __init__(self, pages):
+        self._pages = list(pages or [])
+        self.context_kwargs = []
+        self.contexts = []
+
+    def new_context(self, **kwargs):
+        self.context_kwargs.append(dict(kwargs))
+        if not self._pages:
+            raise RuntimeError("context page missing")
+        context = _FakeBrowserContext(self._pages.pop(0))
+        self.contexts.append(context)
+        return context
+
+
 class IpatPlaywrightBrowserLaunchTests(unittest.TestCase):
     def _new_executor(self, logs=None) -> IpatPlaywrightExecutor:
         settings = AppSettings()
@@ -319,6 +367,27 @@ class IpatPlaywrightBrowserLaunchTests(unittest.TestCase):
         self.assertEqual(launcher.calls[0].get("channel"), "chrome")
         self.assertEqual(launcher.calls[1].get("channel"), "msedge")
         self.assertTrue(any("自動使用しました" in line and "msedge" in line for line in logs))
+
+    def test_goto_retries_with_ignored_https_errors_on_cert_authority_error(self):
+        logs = []
+        executor = self._new_executor(logs=logs)
+        first_page = _FakeGotoPage([RuntimeError("Page.goto: net::ERR_CERT_AUTHORITY_INVALID")])
+        retry_page = _FakeGotoPage([None])
+        old_context = _FakeBrowserContext(first_page)
+        browser = _FakeContextBrowser([retry_page])
+        executor._browser = browser
+        executor._context = old_context
+        executor._page = first_page
+
+        page = executor._goto(first_page, "https://keirin.jp/pc/top", wait_until="domcontentloaded")
+
+        self.assertIs(page, retry_page)
+        self.assertTrue(old_context.closed)
+        self.assertTrue(executor._ignore_https_errors)
+        self.assertEqual(browser.context_kwargs, [{"ignore_https_errors": True}])
+        self.assertEqual(first_page.goto_calls[0]["url"], "https://keirin.jp/pc/top")
+        self.assertEqual(retry_page.goto_calls[0]["url"], "https://keirin.jp/pc/top")
+        self.assertTrue(any("HTTPS証明書エラー" in line for line in logs))
 
 
 class IpatPlaywrightFillTests(unittest.TestCase):

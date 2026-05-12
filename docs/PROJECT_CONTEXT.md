@@ -17,6 +17,7 @@
 - 最終通知は `entry_tickets` として扱い、中央発注キューへ投入する
 - 公式サイト操作は、ログイン、場選択、レース選択、`BOAT.reg_service.addBet(...)`、確認画面、投票実行まで実装済み
 - 最終通知は `締切 HH:MM` から `tool_slot` を補完する（10時前は morning、18時前は daytime、18時以降は midnight）
+- BOAT RACE 公式サイトのサービス時間外を避けるため、中央投票ブラウザの自動起動は `10:00-21:00` に固定する。時間外は起動済みブラウザも閉じる。
 
 ## 中央投票サイトの認証項目
 
@@ -84,3 +85,4 @@ python3 build_release.py --spec kyoutei_auto_entry.spec --clean
 - 公式サイトの画面更新に追従するため、`config.py` と `ipat_playwright.py` のセレクタと公式 JS 呼び出しの整合確認が継続的に必要
 - `submit_enabled=OFF` では確認画面まで進み、最終確定は行わない
 - 候補通知は朝 8:00 運用を前提に `tool_slot=morning` として正規化している
+- 中央投票サイトの開始・終了対象レースはおおむね `10:30-20:30` のため、事前ログイン枠は `10:00-21:00` とする

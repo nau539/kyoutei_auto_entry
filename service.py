@@ -15,7 +15,12 @@ from bet_rules import (
     apply_target_payout_distribution,
     sum_ticket_yen,
 )
-from config import AppSettings, load_internal_selectors
+from config import (
+    DEFAULT_CENTRAL_SCHEDULE_CLOSE_TIME,
+    DEFAULT_CENTRAL_SCHEDULE_OPEN_TIME,
+    AppSettings,
+    load_internal_selectors,
+)
 from discord_client import DiscordClientError, DiscordGatewayClient
 from ipat_playwright import IpatEntryError, IpatPlaywrightExecutor, ThreadBoundIpatPlaywrightExecutor
 from payload_parser import extract_payloads_from_text
@@ -794,6 +799,12 @@ class AutoEntryService:
         slot_name = tool_slot_label(slot) or slot or "候補"
         slot_hour = tool_slot_hour(slot)
         time_note = f"{int(slot_hour):02d}時" if slot_hour is not None else "候補通知時"
+        if not self._is_central_schedule_active_now():
+            self._log_target(
+                self.TARGET_CENTRAL,
+                f"候補連動: {time_note}{slot_name}候補ありですが、起動時間外のためブラウザを起動しません",
+            )
+            return
         had_executor = False
         try:
             had_executor = self._close_executor(self.TARGET_CENTRAL)
@@ -1038,6 +1049,10 @@ class AutoEntryService:
             return
         if not self._is_target_enabled(target):
             return
+        if target == self.TARGET_CENTRAL and not self._is_central_schedule_active_now():
+            self._close_executor_by_schedule_if_needed()
+            self._log_target(target, "見送り: 起動時間外のため事前準備を実行しません")
+            return
         if (target == self.TARGET_LOCAL) and (not self._is_target_selectors_configured(target)):
             self._log_target(target, "見送り: 地方セレクタ未設定のため事前準備を実行しません")
             return
@@ -1056,10 +1071,16 @@ class AutoEntryService:
     def _schedule_central_window_minutes(self) -> tuple[bool, int, int]:
         entry = self.settings.entry
         enabled = bool(getattr(entry, "central_schedule_enabled", True))
-        open_text = str(getattr(entry, "central_schedule_open_time", "08:00") or "08:00").strip().replace("：", ":")
-        close_text = str(getattr(entry, "central_schedule_close_time", "23:30") or "23:30").strip().replace("：", ":")
-        open_min = self._parse_hhmm_to_minutes(open_text, 8 * 60)
-        close_min = self._parse_hhmm_to_minutes(close_text, 23 * 60 + 30)
+        open_text = str(
+            getattr(entry, "central_schedule_open_time", DEFAULT_CENTRAL_SCHEDULE_OPEN_TIME)
+            or DEFAULT_CENTRAL_SCHEDULE_OPEN_TIME
+        ).strip().replace("：", ":")
+        close_text = str(
+            getattr(entry, "central_schedule_close_time", DEFAULT_CENTRAL_SCHEDULE_CLOSE_TIME)
+            or DEFAULT_CENTRAL_SCHEDULE_CLOSE_TIME
+        ).strip().replace("：", ":")
+        open_min = self._parse_hhmm_to_minutes(open_text, 10 * 60)
+        close_min = self._parse_hhmm_to_minutes(close_text, 21 * 60)
         return enabled, open_min, close_min
 
     def _parse_hhmm_to_minutes(self, text: str, default: int) -> int:
@@ -1092,6 +1113,28 @@ class AutoEntryService:
     def _central_schedule_now(self) -> datetime:
         return datetime.now()
 
+    def _is_central_schedule_active_now(self) -> bool:
+        enabled, open_min, close_min = self._schedule_central_window_minutes()
+        if not enabled:
+            return True
+        now = self._central_schedule_now()
+        now_min = int(now.hour * 60 + now.minute)
+        return self._is_in_schedule_window(now_min, open_min, close_min)
+
+    def _close_executor_by_schedule_if_needed(self) -> bool:
+        with self._ipat_locks[self.TARGET_CENTRAL]:
+            executor = self._executors.get(self.TARGET_CENTRAL)
+            if executor is None:
+                return False
+            try:
+                executor.close()
+            except Exception:
+                logger.exception("failed to close central executor by schedule")
+            self._executors[self.TARGET_CENTRAL] = None
+        self._next_central_keepalive_monotonic = 0.0
+        self._next_central_schedule_retry_monotonic = 0.0
+        return True
+
     def _maybe_schedule_central_session(self) -> None:
         if self._stop_event.is_set():
             return
@@ -1116,18 +1159,8 @@ class AutoEntryService:
         should_run = self._is_in_schedule_window(now_min, open_min, close_min)
 
         if not should_run:
-            with self._ipat_locks[self.TARGET_CENTRAL]:
-                executor = self._executors.get(self.TARGET_CENTRAL)
-                if executor is None:
-                    return
-                try:
-                    executor.close()
-                except Exception:
-                    logger.exception("failed to close central executor by schedule")
-                self._executors[self.TARGET_CENTRAL] = None
-            self._next_central_keepalive_monotonic = 0.0
-            self._next_central_schedule_retry_monotonic = 0.0
-            self._log_target(self.TARGET_CENTRAL, "待機スケジュール: 終了時刻のためブラウザを停止しました")
+            if self._close_executor_by_schedule_if_needed():
+                self._log_target(self.TARGET_CENTRAL, "待機スケジュール: 起動時間外のためブラウザを停止しました")
             return
 
         with self._ipat_locks[self.TARGET_CENTRAL]:
@@ -1316,6 +1349,14 @@ class AutoEntryService:
         race = payload.get("race") if isinstance(payload.get("race"), dict) else {}
         race_tag = f"{race.get('date', '-')}_{race.get('venue_name', '-')}_{int(race.get('race_num', 0) or 0):02d}R"
         klog: Callable[[str], None] = lambda text: self._log_target(target, text)
+        if (
+            target == self.TARGET_CENTRAL
+            and not self.settings.entry.dry_run
+            and not self._is_central_schedule_active_now()
+        ):
+            self._close_executor_by_schedule_if_needed()
+            klog(f"見送り: 起動時間外のためブラウザを起動しません ({race_tag})")
+            return
         if (target == self.TARGET_LOCAL) and (not self._is_target_selectors_configured(target)):
             klog(f"見送り: 地方セレクタ未設定のため実行できません ({race_tag})")
             return

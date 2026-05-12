@@ -620,3 +620,28 @@
   - `python3 -m unittest discover -s tests -p 'test_*.py'`
 - Open items:
   - 実機ログイン確認は未実施。日中枠選択時に該当通知が実ブラウザの確認画面まで進むことを確認したい。
+
+## 2026-05-11
+- Task: BOAT RACE サービス時間外のブラウザ常駐を避ける。
+- Summary: 中央投票ブラウザの自動起動時間を `10:00-21:00` に変更し、時間外は起動済みブラウザを閉じるようにした。事前準備、候補連動再起動、発注 payload の各経路でも時間外のブラウザ新規起動を抑止する。
+- Changed files: `config.py`, `service.py`, `ui/views/settings_view.py`, `ui/views/dashboard_view.py`, `ui/views/classic_dashboard_view.py`, `README.md`, `docs/PROJECT_CONTEXT.md`, `tests/test_config.py`, `tests/test_service_routing.py`, `tests/test_service_review.py`, `VERSION.txt`, `docs/CHANGELOG_CUSTOMER.md`, `docs/WORKLOG.md`, `docs/LEARNINGS.md`
+- Verification:
+  - `python3 -m py_compile config.py service.py ui/views/settings_view.py ui/views/dashboard_view.py ui/views/classic_dashboard_view.py tests/test_config.py tests/test_service_routing.py tests/test_service_review.py`
+  - `python3 -m unittest tests.test_config tests.test_service_routing -q`
+  - `python3 -m unittest discover -s tests -p 'test_*.py' -q`
+  - `bash ./sync_to_windows.sh /home/user/src/kyoutei/kyoutei_auto_entry/ /mnt/c/pleiades/2023-03/workspace/kyoutei/kyoutei_auto_entry/`
+  - Windows側 `python .\build_release.py --spec kyoutei_auto_entry.spec --clean`
+- Open items:
+  - Windows 実機で v0.3.19 の起動ログと `10:00-21:00` 外の自動停止を確認したい。
+
+## 2026-05-12
+- Task: 候補連動ログイン時の `ERR_CERT_AUTHORITY_INVALID` 対応
+- Summary: `keirin.jp` への事前ログインで `Page.goto: net::ERR_CERT_AUTHORITY_INVALID` が出て候補連動のブラウザ起動が止まっていた。通常は従来どおり接続し、証明書エラーを検知した時だけ Playwright context を `ignore_https_errors=True` で作り直して同じ URL を再試行するようにした。
+- Changed files: `ipat_playwright.py`, `tests/test_ipat_playwright.py`, `VERSION.txt`, `docs/CHANGELOG_CUSTOMER.md`, `docs/WORKLOG.md`, `docs/LEARNINGS.md`
+- Verification:
+  - `python -m py_compile ipat_playwright.py tests/test_ipat_playwright.py`
+  - `python -m unittest discover -s tests -p test_ipat_playwright.py -q`
+  - `python -m unittest discover -s tests -p "test_*.py" -q`
+  - `wsl -d Ubuntu -- bash -lc "cd /home/user/src/kyoutei/kyoutei_auto_entry && python3 -m unittest discover -s tests -p 'test_*.py' -q"`
+- Open items:
+  - Windows 実機で v0.3.20 の起動ログ後、候補連動の事前ログインが同じ証明書エラーで停止しないことを確認したい。

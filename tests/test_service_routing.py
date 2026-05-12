@@ -535,6 +535,7 @@ class ServiceRoutingTests(unittest.TestCase):
         svc._executors[svc.TARGET_CENTRAL] = old_executor
         svc._central_candidate_pause_active = True
         svc._central_candidate_pause_date = "20260315"
+        svc._central_schedule_now = lambda: datetime(2026, 3, 15, 10, 0, 5)  # type: ignore[method-assign]
 
         new_executor = self._DummyExecutor()
         with mock.patch.object(svc, "_get_executor", return_value=new_executor):
@@ -586,6 +587,7 @@ class ServiceRoutingTests(unittest.TestCase):
         svc._executors[svc.TARGET_CENTRAL] = old_executor
         svc._central_candidate_pause_active = True
         svc._central_candidate_pause_date = "20260315"
+        svc._central_schedule_now = lambda: datetime(2026, 3, 15, 10, 0, 5)  # type: ignore[method-assign]
 
         new_executor = self._DummyExecutor()
         prepare_calls = {"count": 0}
@@ -635,6 +637,7 @@ class ServiceRoutingTests(unittest.TestCase):
         svc._executors[svc.TARGET_CENTRAL] = old_executor
         svc._central_candidate_pause_active = True
         svc._central_candidate_pause_date = "20260315"
+        svc._central_schedule_now = lambda: datetime(2026, 3, 15, 18, 0, 5)  # type: ignore[method-assign]
 
         new_executor = self._DummyExecutor()
         with mock.patch.object(svc, "_get_executor", return_value=new_executor):
@@ -686,6 +689,7 @@ class ServiceRoutingTests(unittest.TestCase):
         svc._executors[svc.TARGET_CENTRAL] = old_executor
         svc._central_candidate_pause_active = True
         svc._central_candidate_pause_date = "20260315"
+        svc._central_schedule_now = lambda: datetime(2026, 3, 15, 18, 0, 5)  # type: ignore[method-assign]
 
         new_executor = self._DummyExecutor()
         with mock.patch.object(svc, "_get_executor", return_value=new_executor):
@@ -986,8 +990,8 @@ class ServiceRoutingTests(unittest.TestCase):
         settings.entry.dry_run = False
         settings.entry.enable_central = True
         settings.entry.central_schedule_enabled = True
-        settings.entry.central_schedule_open_time = "08:00"
-        settings.entry.central_schedule_close_time = "23:30"
+        settings.entry.central_schedule_open_time = "10:00"
+        settings.entry.central_schedule_close_time = "21:00"
         settings.ipat.login_url = "https://keirin.jp/pc/top"
         logs = []
         svc = AutoEntryService(settings, logs.append)
@@ -1007,7 +1011,7 @@ class ServiceRoutingTests(unittest.TestCase):
             return dummy
 
         svc._get_executor = _fake_get_executor  # type: ignore[method-assign]
-        svc._central_schedule_now = lambda: datetime(2026, 3, 2, 8, 5, 0)  # type: ignore[method-assign]
+        svc._central_schedule_now = lambda: datetime(2026, 3, 2, 10, 5, 0)  # type: ignore[method-assign]
 
         svc._maybe_schedule_central_session()
 
@@ -1020,8 +1024,8 @@ class ServiceRoutingTests(unittest.TestCase):
         settings.entry.dry_run = False
         settings.entry.enable_central = True
         settings.entry.central_schedule_enabled = True
-        settings.entry.central_schedule_open_time = "08:00"
-        settings.entry.central_schedule_close_time = "23:30"
+        settings.entry.central_schedule_open_time = "10:00"
+        settings.entry.central_schedule_close_time = "21:00"
         settings.ipat.login_url = "https://keirin.jp/pc/top"
         logs = []
         svc = AutoEntryService(settings, logs.append)
@@ -1042,7 +1046,7 @@ class ServiceRoutingTests(unittest.TestCase):
 
         svc._get_executor = _fake_get_executor  # type: ignore[method-assign]
         svc._startup_history_replay_active = True
-        svc._central_schedule_now = lambda: datetime(2026, 3, 2, 8, 5, 0)  # type: ignore[method-assign]
+        svc._central_schedule_now = lambda: datetime(2026, 3, 2, 10, 5, 0)  # type: ignore[method-assign]
 
         svc._maybe_schedule_central_session()
 
@@ -1055,8 +1059,8 @@ class ServiceRoutingTests(unittest.TestCase):
         settings.entry.dry_run = False
         settings.entry.enable_central = True
         settings.entry.central_schedule_enabled = True
-        settings.entry.central_schedule_open_time = "08:00"
-        settings.entry.central_schedule_close_time = "23:30"
+        settings.entry.central_schedule_open_time = "10:00"
+        settings.entry.central_schedule_close_time = "21:00"
         settings.ipat.login_url = "https://keirin.jp/pc/top"
         logs = []
         svc = AutoEntryService(settings, logs.append)
@@ -1072,7 +1076,7 @@ class ServiceRoutingTests(unittest.TestCase):
             return dummy
 
         svc._get_executor = _fake_get_executor  # type: ignore[method-assign]
-        svc._central_schedule_now = lambda: datetime(2026, 3, 2, 8, 5, 0)  # type: ignore[method-assign]
+        svc._central_schedule_now = lambda: datetime(2026, 3, 2, 10, 5, 0)  # type: ignore[method-assign]
 
         svc._maybe_schedule_central_session()
 
@@ -1085,8 +1089,8 @@ class ServiceRoutingTests(unittest.TestCase):
         settings.entry.dry_run = False
         settings.entry.enable_central = True
         settings.entry.central_schedule_enabled = True
-        settings.entry.central_schedule_open_time = "08:00"
-        settings.entry.central_schedule_close_time = "23:30"
+        settings.entry.central_schedule_open_time = "10:00"
+        settings.entry.central_schedule_close_time = "21:00"
         settings.ipat.login_url = "https://keirin.jp/pc/top"
         logs = []
         svc = AutoEntryService(settings, logs.append)
@@ -1100,13 +1104,66 @@ class ServiceRoutingTests(unittest.TestCase):
 
         dummy = _DummyExecutor()
         svc._executors[svc.TARGET_CENTRAL] = dummy
-        svc._central_schedule_now = lambda: datetime(2026, 3, 2, 23, 40, 0)  # type: ignore[method-assign]
+        svc._central_schedule_now = lambda: datetime(2026, 3, 2, 21, 5, 0)  # type: ignore[method-assign]
 
         svc._maybe_schedule_central_session()
 
         self.assertEqual(dummy.close_calls, 1)
         self.assertIsNone(svc._executors[svc.TARGET_CENTRAL])
-        self.assertTrue(any("待機スケジュール: 終了時刻のためブラウザを停止しました" in line for line in logs))
+        self.assertTrue(any("待機スケジュール: 起動時間外のためブラウザを停止しました" in line for line in logs))
+
+    def test_central_prepare_is_skipped_outside_window_and_closes_browser(self):
+        self._set_channels(central=["100"], local=["200"], legacy=[])
+        settings = AppSettings()
+        settings.entry.dry_run = False
+        settings.entry.enable_central = True
+        settings.entry.central_schedule_enabled = True
+        settings.entry.central_schedule_open_time = "10:00"
+        settings.entry.central_schedule_close_time = "21:00"
+        settings.ipat.login_url = "https://ib.mbrace.or.jp/"
+        logs = []
+        svc = AutoEntryService(settings, logs.append)
+
+        class _DummyExecutor:
+            def __init__(self):
+                self.close_calls = 0
+                self.prepare_calls = 0
+
+            def close(self):
+                self.close_calls += 1
+
+            def prepare_vote_menu(self):
+                self.prepare_calls += 1
+                return {"ok": True}
+
+        dummy = _DummyExecutor()
+        svc._executors[svc.TARGET_CENTRAL] = dummy
+        svc._central_schedule_now = lambda: datetime(2026, 3, 2, 9, 59, 0)  # type: ignore[method-assign]
+
+        svc._handle_prepare_ipat(svc.TARGET_CENTRAL)
+
+        self.assertEqual(dummy.close_calls, 1)
+        self.assertEqual(dummy.prepare_calls, 0)
+        self.assertIsNone(svc._executors[svc.TARGET_CENTRAL])
+        self.assertTrue(any("見送り: 起動時間外のため事前準備を実行しません" in line for line in logs))
+
+    def test_central_payload_is_skipped_outside_window_without_browser_start(self):
+        self._set_channels(central=["100"], local=["200"], legacy=[])
+        settings = AppSettings()
+        settings.entry.dry_run = False
+        settings.entry.enable_central = True
+        settings.entry.central_schedule_enabled = True
+        settings.entry.central_schedule_open_time = "10:00"
+        settings.entry.central_schedule_close_time = "21:00"
+        settings.ipat.login_url = "https://ib.mbrace.or.jp/"
+        logs = []
+        svc = AutoEntryService(settings, logs.append)
+        svc._central_schedule_now = lambda: datetime(2026, 3, 2, 21, 1, 0)  # type: ignore[method-assign]
+
+        svc._execute_payload(svc.TARGET_CENTRAL, self._sample_payload())
+
+        self.assertIsNone(svc._executors[svc.TARGET_CENTRAL])
+        self.assertTrue(any("見送り: 起動時間外のためブラウザを起動しません" in line for line in logs))
 
     def test_local_keepalive_logs_debug_when_refresh_button_not_found(self):
         self._set_channels(central=["100"], local=["200"], legacy=[])
