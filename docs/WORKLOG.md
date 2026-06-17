@@ -710,3 +710,18 @@
   - C:\pleiades\2023-03\workspace\kyoutei\kyoutei_auto_entry\dist に KYOUTEI AI ZERO_v0.3.23.exe、KYOUTEI AI ZERO_v0.3.23_VERSION.txt、KYOUTEI AI ZERO_v0.3.23_CHANGELOG.md が存在することを確認
 - Open items:
   - なし
+
+## 2026-06-17
+- Task: BOAT RACE 特別なお知らせモーダルの自動クローズ
+- Summary: ログイン後の投票TOPに「特別なお知らせ」モーダルが表示され、開催場やレース選択のクリックを塞ぐ状態が確認された。お知らせは既読化せず、閉じるボタンだけを押す処理を競艇ログイン完了待機と発注前TOP確認に追加した。
+- Changed files: ipat_playwright.py, tests/test_ipat_playwright.py, VERSION.txt, docs/CHANGELOG_CUSTOMER.md, docs/WORKLOG.md, docs/LEARNINGS.md
+- Verification:
+  - python3 -m py_compile main.py ipat_playwright.py tests/test_ipat_playwright.py
+  - python3 -m unittest discover -s tests -p test_*.py -q
+  - Windows側で python -m py_compile main.py ipat_playwright.py tests/test_ipat_playwright.py
+  - Windows側で python -m unittest discover -s tests -p test_*.py -q
+  - Windows側の実設定を使い、投票なしの事前準備ログインで BOAT RACE 特別なお知らせが自動で閉じることを確認
+  - Windows側で python build_release.py --spec kyoutei_auto_entry.spec --clean
+  - C:\pleiades\2023-03\workspace\kyoutei\kyoutei_auto_entry\dist に KYOUTEI AI ZERO_v0.3.24.exe、KYOUTEI AI ZERO_v0.3.24_VERSION.txt、KYOUTEI AI ZERO_v0.3.24_CHANGELOG.md が存在することを確認
+- Open items:
+  - なし

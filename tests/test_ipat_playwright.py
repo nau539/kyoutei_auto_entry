@@ -1148,6 +1148,76 @@ class IpatPlaywrightKeirinTests(unittest.TestCase):
         self.assertEqual(page.goto_calls, 0)
         self.assertEqual(page.click_calls, 0)
 
+    def test_kyoutei_special_notice_close_does_not_mark_all_read(self):
+        settings = AppSettings()
+        logs = []
+        executor = IpatPlaywrightExecutor(settings, event_logger=logs.append)
+        state = {"visible": True}
+
+        class _Node:
+            def __init__(self, text: str = ""):
+                self.text = str(text)
+                self.clicked = 0
+
+            def is_visible(self):
+                return state["visible"]
+
+            def is_enabled(self):
+                return True
+
+            def inner_text(self, timeout=1000):
+                _ = timeout
+                return self.text
+
+            def click(self):
+                self.clicked += 1
+                if self.text == "閉じる":
+                    state["visible"] = False
+
+        notice = _Node("特別なお知らせ")
+        close = _Node("閉じる")
+        all_read = _Node("すべて既読にする")
+
+        class _Page:
+            def locator(self, selector: str):
+                sel = str(selector or "")
+                if sel in {"#newsoverviewDisp", "div#newsoverviewDisp"} and state["visible"]:
+                    return _DummyLocator([notice])
+                if sel == "#newsoverviewdispCloseButton" and state["visible"]:
+                    return _DummyLocator([close])
+                if sel == "#isAllread" and state["visible"]:
+                    return _DummyLocator([all_read])
+                return _DummyLocator([])
+
+            def wait_for_timeout(self, _ms: int) -> None:
+                return
+
+        page = _Page()
+        self.assertTrue(executor._kyoutei_dismiss_special_notice_if_present(page))
+        self.assertFalse(state["visible"])
+        self.assertEqual(close.clicked, 1)
+        self.assertEqual(all_read.clicked, 0)
+        self.assertTrue(any("特別なお知らせ" in line for line in logs))
+
+    def test_kyoutei_wait_top_page_ready_closes_special_notice_on_top_url(self):
+        settings = AppSettings()
+        executor = IpatPlaywrightExecutor(settings, event_logger=lambda _line: None)
+        calls = {"dismiss": 0}
+
+        class _Page:
+            url = "https://ib.mbrace.or.jp/tohyo-ap-pctohyo-web/service/bet/top/init?cid=apA44"
+
+            def wait_for_timeout(self, _ms: int) -> None:
+                return
+
+        executor._kyoutei_dismiss_special_notice_if_present = (  # type: ignore[method-assign]
+            lambda _p, timeout_ms=0: calls.__setitem__("dismiss", calls["dismiss"] + int(timeout_ms))
+        )
+
+        executor._kyoutei_wait_top_page_ready(_Page())
+
+        self.assertEqual(calls["dismiss"], 1200)
+
     def test_keirin_required_positions(self):
         settings = AppSettings()
         executor = IpatPlaywrightExecutor(settings, event_logger=lambda _line: None)

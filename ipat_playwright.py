@@ -1925,6 +1925,7 @@ class IpatPlaywrightExecutor:
 
     def _kyoutei_wait_top_page_ready(self, page) -> None:
         if self._kyoutei_is_top_page(page):
+            self._kyoutei_dismiss_special_notice_if_present(page, timeout_ms=1200)
             return
         if not self._wait_for_any_visible(
             page,
@@ -1933,6 +1934,77 @@ class IpatPlaywrightExecutor:
             poll_ms=120,
         ):
             raise IpatEntryError(f"競艇TOP画面の初期化待機に失敗しました (url={getattr(page, 'url', '-')})")
+        self._kyoutei_dismiss_special_notice_if_present(page, timeout_ms=1200)
+
+    def _kyoutei_special_notice_selectors(self) -> List[str]:
+        return self._selector_list(
+            "kyoutei_special_notice_selector",
+            "#newsoverviewDisp",
+            "div#newsoverviewDisp",
+            "#newsoverviewDisp h1:has-text('特別なお知らせ')",
+        )
+
+    def _kyoutei_is_special_notice_visible(self, page) -> bool:
+        return any(self._is_visible(page, sel) for sel in self._kyoutei_special_notice_selectors())
+
+    def _kyoutei_dismiss_special_notice_if_present(self, page, timeout_ms: int = 0) -> bool:
+        if not self._kyoutei_is_special_notice_visible(page):
+            wait_ms = max(0, int(timeout_ms or 0))
+            if wait_ms <= 0:
+                return False
+            if not self._wait_for_any_visible(
+                page,
+                self._kyoutei_special_notice_selectors(),
+                timeout_ms=wait_ms,
+                poll_ms=80,
+            ):
+                return False
+
+        self._emit("BOAT RACE特別なお知らせを閉じます")
+        clicked = False
+        for _ in range(8):
+            clicked = self._click_any(
+                page,
+                "kyoutei_special_notice_close_button",
+                "#newsoverviewdispCloseButton",
+                "div#newsoverviewDisp .btn.close a:has-text('閉じる')",
+                "#newsoverviewDisp a:has-text('閉じる')",
+                required=False,
+            )
+            if clicked:
+                break
+            try:
+                clicked = bool(
+                    page.evaluate(
+                        """
+                        () => {
+                          const btn = document.querySelector('#newsoverviewdispCloseButton');
+                          if (!btn) return false;
+                          btn.click();
+                          return true;
+                        }
+                        """
+                    )
+                )
+            except Exception:
+                clicked = False
+            if clicked:
+                break
+            page.wait_for_timeout(120)
+
+        if not clicked:
+            raise IpatEntryError("BOAT RACE特別なお知らせの閉じるボタンを押せませんでした")
+
+        for _ in range(20):
+            if not self._wait_for_any_visible(
+                page,
+                self._selector_list("kyoutei_special_notice_selector", "#newsoverviewDisp", "div#newsoverviewDisp"),
+                timeout_ms=120,
+                poll_ms=60,
+            ):
+                return True
+            page.wait_for_timeout(100)
+        raise IpatEntryError("BOAT RACE特別なお知らせが閉じませんでした")
 
     def _kyoutei_dismiss_popup(self, page) -> bool:
         if not self._wait_for_any_visible(
@@ -1959,12 +2031,14 @@ class IpatPlaywrightExecutor:
     def _ensure_logged_in_kyoutei(self, page, login_url: str):
         active = self._kyoutei_find_active_page(page)
         if active is not None:
+            self._kyoutei_dismiss_special_notice_if_present(active)
             self._page = active
             return active
 
         page = self._goto(page, login_url, wait_until="domcontentloaded")
         active = self._kyoutei_find_active_page(page)
         if active is not None:
+            self._kyoutei_dismiss_special_notice_if_present(active)
             self._page = active
             return active
 
@@ -2013,6 +2087,7 @@ class IpatPlaywrightExecutor:
 
     def _kyoutei_return_top(self, page) -> bool:
         if self._kyoutei_is_top_page(page):
+            self._kyoutei_dismiss_special_notice_if_present(page)
             return True
         try:
             moved = page.evaluate(
@@ -2029,6 +2104,7 @@ class IpatPlaywrightExecutor:
             )
             if moved:
                 self._kyoutei_wait_top_page_ready(page)
+                self._kyoutei_dismiss_special_notice_if_present(page)
                 return self._kyoutei_is_top_page(page)
         except Exception:
             pass
@@ -2052,8 +2128,10 @@ class IpatPlaywrightExecutor:
         if not jyo_code:
             raise IpatEntryError(f"競艇場コードを解決できませんでした: {venue_name}")
 
+        self._kyoutei_dismiss_special_notice_if_present(page)
         if not self._kyoutei_is_top_page(page) and (not self._kyoutei_return_top(page)):
             raise IpatEntryError("競艇TOP画面へ戻れませんでした")
+        self._kyoutei_dismiss_special_notice_if_present(page)
 
         try:
             moved = page.evaluate(
