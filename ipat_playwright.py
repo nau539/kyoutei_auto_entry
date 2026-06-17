@@ -743,6 +743,15 @@ class IpatPlaywrightExecutor:
     def _op_timeout_ms(self, minimum_ms: int = 2000, scale: int = 1000) -> int:
         return max(int(minimum_ms), int(self._op_timeout_sec() * int(scale)))
 
+    def _navigation_timeout_ms(self) -> int:
+        return max(15000, self._op_timeout_ms(minimum_ms=15000, scale=10000))
+
+    def _configure_page_timeouts(self, page) -> None:
+        page.set_default_timeout(self._op_timeout_ms(minimum_ms=1000))
+        set_navigation_timeout = getattr(page, "set_default_navigation_timeout", None)
+        if callable(set_navigation_timeout):
+            set_navigation_timeout(self._navigation_timeout_ms())
+
     def _horse_select_timeout_ms(self) -> int:
         # 馬番選択は画面反映が遅れることがあるため、全体待機より少し長めに許容する。
         return max(4000, self._op_timeout_ms())
@@ -958,7 +967,7 @@ class IpatPlaywrightExecutor:
         self._page = self._context.new_page()
         if self.target == "local":
             self._attach_local_dialog_handler()
-        self._page.set_default_timeout(self._op_timeout_ms(minimum_ms=1000))
+        self._configure_page_timeouts(self._page)
         return self._page
 
     def _new_browser_context(self):
@@ -987,18 +996,27 @@ class IpatPlaywrightExecutor:
         self._page = self._context.new_page()
         if self.target == "local":
             self._attach_local_dialog_handler()
-        self._page.set_default_timeout(self._op_timeout_ms(minimum_ms=1000))
+        self._configure_page_timeouts(self._page)
         return self._page
+
+    def _goto_once(self, page, url: str, wait_until: str):
+        timeout_ms = self._navigation_timeout_ms()
+        try:
+            return page.goto(url, wait_until=wait_until, timeout=timeout_ms)
+        except TypeError as exc:
+            if "timeout" not in str(exc):
+                raise
+            return page.goto(url, wait_until=wait_until)
 
     def _goto(self, page, url: str, wait_until: str = "domcontentloaded"):
         try:
-            page.goto(url, wait_until=wait_until)
+            self._goto_once(page, url, wait_until)
             return page
         except Exception as exc:
             if (not self._is_certificate_authority_error(exc)) or self._ignore_https_errors:
                 raise
             retry_page = self._recreate_page_ignoring_https_errors()
-            retry_page.goto(url, wait_until=wait_until)
+            self._goto_once(retry_page, url, wait_until)
             return retry_page
 
     def _attach_local_dialog_handler(self) -> None:
@@ -1863,15 +1881,41 @@ class IpatPlaywrightExecutor:
             "#voteListAreaInner",
         )
 
+    def _kyoutei_current_url(self, page) -> str:
+        try:
+            return str(getattr(page, "url", "") or "").strip().lower()
+        except Exception:
+            return ""
+
+    def _kyoutei_is_top_url(self, page) -> bool:
+        current_url = self._kyoutei_current_url(page)
+        return "ib.mbrace.or.jp" in current_url and "/service/bet/top/" in current_url
+
     def _kyoutei_is_logged_in(self, page) -> bool:
-        return self._wait_for_any_visible(
+        if self._kyoutei_is_top_url(page):
+            return True
+        if self._wait_for_any_visible(
             page,
             self._kyoutei_top_ready_selectors(),
             timeout_ms=500,
             poll_ms=80,
+        ):
+            return True
+        return self._wait_for_any_visible(
+            page,
+            self._selector_list(
+                "kyoutei_logout_selector",
+                "a:has-text('ログアウト')",
+                "button:has-text('ログアウト')",
+                "text=ログアウト",
+            ),
+            timeout_ms=300,
+            poll_ms=80,
         )
 
     def _kyoutei_is_top_page(self, page) -> bool:
+        if self._kyoutei_is_top_url(page):
+            return True
         return self._wait_for_any_visible(
             page,
             self._selector_list("kyoutei_venue_list_selector", "#jyoInfos li", "#jyoInfosTab li", "#todayForm", "#beforeForm"),
@@ -1880,6 +1924,8 @@ class IpatPlaywrightExecutor:
         )
 
     def _kyoutei_wait_top_page_ready(self, page) -> None:
+        if self._kyoutei_is_top_page(page):
+            return
         if not self._wait_for_any_visible(
             page,
             self._kyoutei_top_ready_selectors(),

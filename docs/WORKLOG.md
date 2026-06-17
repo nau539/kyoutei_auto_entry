@@ -646,3 +646,67 @@
   - `python build_release.py --spec kyoutei_auto_entry.spec --clean`
 - Open items:
   - Windows 実機で v0.3.20 の起動ログ後、候補連動の事前ログインが同じ証明書エラーで停止しないことを確認したい。
+
+## 2026-06-10
+- Task: BOAT RACE Discord通知のエントリー金額保持
+- Summary: kyoutei_bunsekiの最終通知は既に受信とキュー投入ができる状態だったが、発注準備で通知金額ではなく自動投票側設定に再配分していたため、kyouteiのDiscord定型文では通知本文の投資額を保持するよう変更した。
+- Changed files: service.py, tests/test_service_review.py, VERSION.txt, docs/CHANGELOG_CUSTOMER.md, docs/PROJECT_CONTEXT.md, docs/WORKLOG.md, docs/LEARNINGS.md
+- Verification:
+  - python3 -m unittest tests.test_service_review -q
+  - python3 -m unittest tests.test_payload_parser tests.test_service_routing tests.test_ipat_playwright tests.test_service_review -q
+  - python3 -m py_compile service.py tests/test_service_review.py && python3 -m unittest discover -s tests -p test_*.py -q
+  - python3 build_release.py --spec kyoutei_auto_entry.spec --clean --dry-run
+  - stable3f形式の手動サンプルで3連複 1-3-4、3,100円が発注準備後も保持されることを確認
+- Open items:
+  - Windows実機では未確認。配布EXE更新後、最終確定OFFで確認画面までの金額表示を1回確認したい。
+
+## 2026-06-10
+- Task: Windows distへのv0.3.21配置
+- Summary: WSL側の修正済みファイルをWindows側のkyoutei_auto_entryへ反映し、Windows環境で配布ビルドを実行して指定distへv0.3.21のEXE、VERSION、CHANGELOGを配置した。
+- Changed files: docs/WORKLOG.md, docs/LEARNINGS.md
+- Verification:
+  - Windows側で python -m unittest tests.test_service_review -q
+  - Windows側で python build_release.py --spec kyoutei_auto_entry.spec --clean
+  - C:\pleiades\2023-03\workspace\kyoutei\kyoutei_auto_entry\dist に KYOUTEI AI ZERO_v0.3.21.exe、KYOUTEI AI ZERO_v0.3.21_VERSION.txt、KYOUTEI AI ZERO_v0.3.21_CHANGELOG.md が存在することを確認
+- Open items:
+  - なし
+
+## 2026-06-17
+- Task: 実機画面の競艇発注失敗エラー内容確認
+- Summary: 画面ログでは住之江1Rは発注処理完了 status submitted まで進んでいた。一方、蒲郡1Rでは BOAT RACE ログインボタン kyoutei_login_button が見つからない、またはクリックできないため発注失敗になっていた。
+- Changed files: docs/WORKLOG.md, docs/LEARNINGS.md
+- Verification:
+  - ipat_playwright.py の該当箇所を確認し、エラーがログインフォーム入力後のログインボタンクリック処理から出ていることを確認
+  - service.py の表示処理を確認し、発注失敗詳細として IpatEntryError の内容が表示されることを確認
+- Open items:
+  - Windows実機側の runtime_logs debug 内にある失敗時スクリーンショットとHTMLを確認できれば、公式サイト画面変更、ログイン済み別画面、セッション切れ、ポップアップ被りのどれかをさらに確定できる。
+
+## 2026-06-17
+- Task: BOAT RACE 投票TOPのログイン済み判定漏れを修正
+- Summary: お客様提供のデバッグログでは、URLが BOAT RACE の投票TOPで、画面にも開催一覧とログアウトが表示されていた。ログイン済みであるにもかかわらず、従来のTOP判定セレクタに一致せず、ログインボタンを探して失敗していたため、投票TOPのURLをログイン済みTOPとして扱う判定を追加した。
+- Changed files: ipat_playwright.py, tests/test_ipat_playwright.py, VERSION.txt, docs/CHANGELOG_CUSTOMER.md, docs/WORKLOG.md, docs/LEARNINGS.md
+- Verification:
+  - python3 -m py_compile ipat_playwright.py tests/test_ipat_playwright.py
+  - python3 -m unittest tests.test_ipat_playwright -q
+  - python3 -m unittest discover -s tests -p test_*.py -q
+  - Windows側で python -m py_compile main.py ipat_playwright.py tests/test_ipat_playwright.py
+  - Windows側で python -m unittest discover -s tests -p test_*.py -q
+  - Windows側で python build_release.py --spec kyoutei_auto_entry.spec --clean
+  - C:\pleiades\2023-03\workspace\kyoutei\kyoutei_auto_entry\dist に KYOUTEI AI ZERO_v0.3.22.exe、KYOUTEI AI ZERO_v0.3.22_VERSION.txt、KYOUTEI AI ZERO_v0.3.22_CHANGELOG.md が存在することを確認
+- Open items:
+  - お客様環境で同じ投票TOP画面から蒲郡などの次レースへ進めるか確認する。
+
+## 2026-06-17
+- Task: BOAT RACE ログインページ遷移の2秒タイムアウト対策
+- Summary: 実機ログでは BOAT RACE 入口ページへの遷移が2秒でタイムアウトし、URLが about:blank のままログイン処理前に失敗していた。画面操作用の短い待機は維持しつつ、ページ遷移だけ15秒以上の待機を使うように分離した。
+- Changed files: ipat_playwright.py, tests/test_ipat_playwright.py, VERSION.txt, docs/CHANGELOG_CUSTOMER.md, docs/WORKLOG.md, docs/LEARNINGS.md
+- Verification:
+  - python3 -m py_compile main.py ipat_playwright.py tests/test_ipat_playwright.py
+  - python3 -m unittest discover -s tests -p test_*.py -q
+  - Windows側で python -m py_compile main.py ipat_playwright.py tests/test_ipat_playwright.py
+  - Windows側で python -m unittest discover -s tests -p test_*.py -q
+  - Windows側の実設定を使い、投票なしの事前準備ログインで BOAT RACE 投票TOP URL へ到達することを確認
+  - Windows側で python build_release.py --spec kyoutei_auto_entry.spec --clean
+  - C:\pleiades\2023-03\workspace\kyoutei\kyoutei_auto_entry\dist に KYOUTEI AI ZERO_v0.3.23.exe、KYOUTEI AI ZERO_v0.3.23_VERSION.txt、KYOUTEI AI ZERO_v0.3.23_CHANGELOG.md が存在することを確認
+- Open items:
+  - なし

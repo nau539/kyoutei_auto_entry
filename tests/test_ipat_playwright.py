@@ -263,10 +263,11 @@ class _FakeGotoPage:
         self._results = list(results or [])
         self.goto_calls = []
         self.default_timeout = None
+        self.default_navigation_timeout = None
         self.url = "about:blank"
 
-    def goto(self, url, wait_until="domcontentloaded"):
-        self.goto_calls.append({"url": url, "wait_until": wait_until})
+    def goto(self, url, wait_until="domcontentloaded", timeout=None):
+        self.goto_calls.append({"url": url, "wait_until": wait_until, "timeout": timeout})
         self.url = url
         if not self._results:
             return None
@@ -277,6 +278,9 @@ class _FakeGotoPage:
 
     def set_default_timeout(self, timeout_ms):
         self.default_timeout = timeout_ms
+
+    def set_default_navigation_timeout(self, timeout_ms):
+        self.default_navigation_timeout = timeout_ms
 
 
 class _FakeBrowserContext:
@@ -367,6 +371,19 @@ class IpatPlaywrightBrowserLaunchTests(unittest.TestCase):
         self.assertEqual(launcher.calls[0].get("channel"), "chrome")
         self.assertEqual(launcher.calls[1].get("channel"), "msedge")
         self.assertTrue(any("自動使用しました" in line and "msedge" in line for line in logs))
+
+    def test_page_navigation_uses_longer_timeout_than_ui_operations(self):
+        executor = self._new_executor()
+        executor.settings.ipat.timeout_sec = 2
+        page = _FakeGotoPage([None])
+
+        executor._configure_page_timeouts(page)
+        result = executor._goto(page, "https://ib.mbrace.or.jp/", wait_until="domcontentloaded")
+
+        self.assertIs(result, page)
+        self.assertEqual(page.default_timeout, 2000)
+        self.assertGreaterEqual(page.default_navigation_timeout, 15000)
+        self.assertEqual(page.goto_calls[0]["timeout"], page.default_navigation_timeout)
 
     def test_goto_retries_with_ignored_https_errors_on_cert_authority_error(self):
         logs = []
@@ -1097,6 +1114,39 @@ class IpatPlaywrightKeirinTests(unittest.TestCase):
         self.assertEqual(calls[0]["numberOfSheets"], 5)
         self.assertEqual(calls[0]["kachishiki"], "7")
         self.assertEqual(calls[0]["selectList"], ["1", "2", "3"])
+
+    def test_kyoutei_top_init_url_is_treated_as_logged_in(self):
+        settings = AppSettings()
+        settings.ipat.login_url = "https://ib.mbrace.or.jp/"
+        executor = IpatPlaywrightExecutor(settings, event_logger=lambda _line: None)
+
+        class _Page:
+            def __init__(self):
+                self.url = "https://ib.mbrace.or.jp/tohyo-ap-pctohyo-web/service/bet/top/init?cid=apA41"
+                self.goto_calls = 0
+                self.click_calls = 0
+
+            def goto(self, url: str, wait_until: str = "domcontentloaded"):
+                _ = wait_until
+                self.goto_calls += 1
+                self.url = str(url)
+
+            def locator(self, selector: str):
+                if str(selector or "") == "#loginButton":
+                    self.click_calls += 1
+                return _DummyLocator([])
+
+            def wait_for_timeout(self, _ms: int) -> None:
+                return
+
+        page = _Page()
+        active = executor._ensure_logged_in_kyoutei(page, "https://ib.mbrace.or.jp/")
+
+        self.assertIs(active, page)
+        self.assertTrue(executor._kyoutei_is_logged_in(page))
+        self.assertTrue(executor._kyoutei_is_top_page(page))
+        self.assertEqual(page.goto_calls, 0)
+        self.assertEqual(page.click_calls, 0)
 
     def test_keirin_required_positions(self):
         settings = AppSettings()
