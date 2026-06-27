@@ -1,0 +1,33 @@
+{
+  "payload": {
+    "race": {
+      "date": "20260410",
+      "venue_name": "大村",
+      "race_num": 1,
+      "race_id": "20260410_大村_01R"
+    },
+    "tickets": [
+      {
+        "market": "2連複",
+        "combo": "1-2",
+        "bet_yen": 500,
+        "odds": 4.2
+      }
+    ]
+  },
+  "entry_tickets": [
+    {
+      "market": "2連複",
+      "combo": "1-2",
+      "bet_yen": 2400,
+      "odds": 4.2
+    }
+  ],
+  "entry_result": {
+    "status": "dry_run",
+    "ticket_count": 1,
+    "total_yen": 2400
+  },
+  "target": "local",
+  "saved_at": "2026-05-12 17:18:01"
+}

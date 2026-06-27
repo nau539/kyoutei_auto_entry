@@ -1,0 +1,33 @@
+{
+  "payload": {
+    "race": {
+      "date": "20260217",
+      "venue_name": "東京",
+      "race_num": 8,
+      "race_id": "20260217_東京_08R"
+    },
+    "tickets": [
+      {
+        "market": "馬連",
+        "combo": "7-11",
+        "bet_yen": 500,
+        "odds": 4.2
+      }
+    ]
+  },
+  "entry_tickets": [
+    {
+      "market": "馬連",
+      "combo": "7-11",
+      "bet_yen": 2400,
+      "odds": 4.2
+    }
+  ],
+  "entry_result": {
+    "status": "dry_run",
+    "ticket_count": 1,
+    "total_yen": 2400
+  },
+  "target": "local",
+  "saved_at": "2026-04-10 06:49:11"
+}
