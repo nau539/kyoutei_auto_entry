@@ -8,18 +8,10 @@ import subprocess
 import sys
 import time
 
-from product_profile import (
-    PLAN_ORDER,
-    PRODUCT_EXE_BASENAME,
-    UI_VARIANT_CLASSIC_TRIAL,
-    build_plan_app_name,
-    build_trial_app_name,
-)
+from product_profile import PRODUCT_EXE_BASENAME
 
 
 EXE_NAME_ENV = "APP_EXE_NAME"
-PLAN_TIER_ENV = "APP_FIXED_PLAN_TIER"
-UI_VARIANT_ENV = "APP_UI_VARIANT"
 PROJECT_DIR = Path(__file__).resolve().parent
 VERSION_FILE = PROJECT_DIR / "VERSION.txt"
 DIST_DIR = PROJECT_DIR / "dist"
@@ -68,7 +60,7 @@ def find_spec_file(spec_arg: str) -> Path:
 
     names = ", ".join([p.name for p in specs])
     raise ValueError(
-        "spec が複数あります。`--spec <file>` で指定してください: "
+        "spec が複数あります。--spec <file> で指定してください: "
         f"{names}"
     )
 
@@ -109,7 +101,7 @@ def ensure_playwright_chromium_ready() -> None:
         import playwright
     except Exception:
         raise RuntimeError(
-            "playwright が見つかりません。`pip install playwright` を実行してください。"
+            "playwright が見つかりません。pip install playwright を実行してください。"
         )
 
     roots = _candidate_playwright_browser_roots(playwright)
@@ -126,8 +118,8 @@ def ensure_playwright_chromium_ready() -> None:
     checked = ", ".join(str(p) for p in roots)
     raise RuntimeError(
         "Playwright Chromium が見つかりません。"
-        "`python -m playwright install chromium` を実行してからビルドしてください。"
-        " うまくいかない場合は `PLAYWRIGHT_BROWSERS_PATH=0` を設定して再インストールしてください。"
+        "python -m playwright install chromium を実行してからビルドしてください。"
+        " うまくいかない場合は PLAYWRIGHT_BROWSERS_PATH=0 を設定して再インストールしてください。"
         f" (checked: {checked})"
     )
 
@@ -136,16 +128,6 @@ def infer_app_basename(spec_file: Path, app_name_arg: str) -> str:
     if app_name_arg and app_name_arg.strip():
         return app_name_arg.strip()
     return PRODUCT_EXE_BASENAME or spec_file.stem
-
-
-def normalize_build_plan(value: str) -> str:
-    text = str(value or "").strip().lower()
-    return text if text in PLAN_ORDER else ""
-
-
-def normalize_build_ui_variant(value: str) -> str:
-    text = str(value or "").strip().lower()
-    return text if text == UI_VARIANT_CLASSIC_TRIAL else ""
 
 
 def build_exe_name(app_basename: str, version: str) -> str:
@@ -159,13 +141,9 @@ def run_pyinstaller(
     clean: bool,
     dry_run: bool,
     bundle_browser: bool,
-    fixed_plan_tier: str = "",
-    ui_variant: str = "",
 ) -> float:
     env = os.environ.copy()
     env[EXE_NAME_ENV] = exe_name
-    env[PLAN_TIER_ENV] = normalize_build_plan(fixed_plan_tier)
-    env[UI_VARIANT_ENV] = normalize_build_ui_variant(ui_variant)
     env["BUNDLE_PLAYWRIGHT_BROWSER"] = "1" if bundle_browser else "0"
 
     base_cmd = ["pyinstaller", "--noconfirm", spec_file.name]
@@ -176,8 +154,6 @@ def run_pyinstaller(
 
     print(f"[build] spec: {spec_file.name}")
     print(f"[build] exe名: {exe_name}")
-    print(f"[build] 固定プラン: {normalize_build_plan(fixed_plan_tier) or 'none'}")
-    print(f"[build] UI種別: {normalize_build_ui_variant(ui_variant) or 'product'}")
     print(f"[build] playwright browser同梱: {'ON' if bundle_browser else 'OFF'}")
     print(f"[build] command: {' '.join(cmd)}")
     if dry_run:
@@ -289,7 +265,7 @@ def copy_release_notes(exe_name: str, version_file: Path, changelog_file: Path, 
         shutil.copy2(changelog_file, changelog_dst)
 
 
-def build_single_plan(
+def build_release(
     *,
     spec_file: Path,
     version_file: Path,
@@ -297,19 +273,9 @@ def build_single_plan(
     clean: bool,
     dry_run: bool,
     bundle_browser: bool,
-    fixed_plan_tier: str = "",
     app_name_arg: str = "",
-    ui_variant: str = "",
-    app_basename_override: str = "",
 ) -> Path:
-    plan = normalize_build_plan(fixed_plan_tier)
-    if app_basename_override:
-        app_basename = app_basename_override
-    elif plan:
-        app_basename = build_plan_app_name(plan)
-    else:
-        app_basename = infer_app_basename(spec_file, app_name_arg)
-
+    app_basename = infer_app_basename(spec_file, app_name_arg)
     version = read_version(version_file)
     exe_name = build_exe_name(app_basename, version)
     if bundle_browser and (not dry_run):
@@ -320,8 +286,6 @@ def build_single_plan(
         clean=clean,
         dry_run=dry_run,
         bundle_browser=bundle_browser,
-        fixed_plan_tier=plan,
-        ui_variant=ui_variant,
     )
 
     final_artifact = DIST_DIR / f"{exe_name}.exe"
@@ -338,28 +302,6 @@ def build_single_plan(
     return final_artifact
 
 
-def build_trial_package(
-    *,
-    spec_file: Path,
-    version_file: Path,
-    changelog_file: Path,
-    clean: bool,
-    dry_run: bool,
-    bundle_browser: bool,
-) -> Path:
-    return build_single_plan(
-        spec_file=spec_file,
-        version_file=version_file,
-        changelog_file=changelog_file,
-        clean=clean,
-        dry_run=dry_run,
-        bundle_browser=bundle_browser,
-        fixed_plan_tier="gold",
-        ui_variant=UI_VARIANT_CLASSIC_TRIAL,
-        app_basename_override=build_trial_app_name(),
-    )
-
-
 def main() -> int:
     parser = argparse.ArgumentParser(
         description=(
@@ -368,10 +310,7 @@ def main() -> int:
         )
     )
     parser.add_argument("--spec", default="", help="対象spec（未指定時は自動判定）")
-    parser.add_argument("--app-name", default="", help="成果物ベース名（未指定時はspec名）")
-    parser.add_argument("--plan", choices=list(PLAN_ORDER), default="", help="固定プラン版を1本だけビルドする")
-    parser.add_argument("--all-plans", action="store_true", help="BRONZE / SILVER / GOLD の3本をまとめてビルドする")
-    parser.add_argument("--trial", action="store_true", help="旧UIの体験版（GOLD相当）を1本ビルドする")
+    parser.add_argument("--app-name", default="", help="成果物ベース名（未指定時は商品名）")
     parser.add_argument("--version-file", default=str(VERSION_FILE), help="VERSION.txt のパス")
     parser.add_argument("--changelog", default=str(CHANGELOG_FILE), help="CHANGELOG のパス")
     parser.add_argument("--clean", action="store_true", help="PyInstaller を clean build で実行する")
@@ -386,46 +325,17 @@ def main() -> int:
                 " 実配布用ビルドは Windows 上で実行してください。"
             )
 
-        selected_modes = int(bool(args.plan)) + int(bool(args.all_plans)) + int(bool(args.trial))
-        if selected_modes > 1:
-            raise ValueError("--plan / --all-plans / --trial は同時指定できません")
-
         spec_file = find_spec_file(args.spec)
         version_file = Path(args.version_file).resolve()
         changelog_file = Path(args.changelog).resolve()
 
-        if args.all_plans:
-            for plan in PLAN_ORDER:
-                build_single_plan(
-                    spec_file=spec_file,
-                    version_file=version_file,
-                    changelog_file=changelog_file,
-                    clean=args.clean,
-                    dry_run=args.dry_run,
-                    bundle_browser=bool(args.bundle_browser),
-                    fixed_plan_tier=plan,
-                )
-            return 0
-
-        if args.trial:
-            build_trial_package(
-                spec_file=spec_file,
-                version_file=version_file,
-                changelog_file=changelog_file,
-                clean=args.clean,
-                dry_run=args.dry_run,
-                bundle_browser=bool(args.bundle_browser),
-            )
-            return 0
-
-        build_single_plan(
+        build_release(
             spec_file=spec_file,
             version_file=version_file,
             changelog_file=changelog_file,
             clean=args.clean,
             dry_run=args.dry_run,
             bundle_browser=bool(args.bundle_browser),
-            fixed_plan_tier=args.plan,
             app_name_arg=args.app_name,
         )
         return 0

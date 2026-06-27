@@ -6,9 +6,7 @@ import sys
 from pathlib import Path
 from typing import List, Tuple
 
-APP_EXE_NAME = os.environ.get("APP_EXE_NAME", "KYOUTEI AI ZERO")
-APP_FIXED_PLAN_TIER = os.environ.get("APP_FIXED_PLAN_TIER", "").strip().lower()
-APP_UI_VARIANT = os.environ.get("APP_UI_VARIANT", "").strip().lower()
+APP_EXE_NAME = os.environ.get("APP_EXE_NAME", "AQUA EDGE AI")
 BUNDLE_PLAYWRIGHT_BROWSER = os.environ.get("BUNDLE_PLAYWRIGHT_BROWSER", "0").strip().lower() in {"1", "true", "yes", "on"}
 PLAYWRIGHT_BUNDLE_DIR_PREFIXES = (
     "chromium-",
@@ -122,31 +120,7 @@ def _collect_playwright_browser_datas() -> List[Tuple[str, str]]:
     return datas
 
 
-def _runtime_profile_hook_paths() -> List[str]:
-    lines = ["import os\n"]
-    name_parts: List[str] = []
-
-    if APP_FIXED_PLAN_TIER in {"bronze", "silver", "gold"}:
-        lines.append(f"os.environ['KYOUTEI_AI_ZERO_FIXED_PLAN_TIER'] = '{APP_FIXED_PLAN_TIER}'\n")
-        name_parts.append(f"plan_{APP_FIXED_PLAN_TIER}")
-        print(f"[spec] fixed plan hook: {APP_FIXED_PLAN_TIER}")
-
-    if APP_UI_VARIANT == "classic_trial":
-        lines.append(f"os.environ['KYOUTEI_AI_ZERO_UI_VARIANT'] = '{APP_UI_VARIANT}'\n")
-        name_parts.append(APP_UI_VARIANT)
-        print(f"[spec] ui variant hook: {APP_UI_VARIANT}")
-
-    if len(lines) == 1:
-        return []
-    hook_dir = _spec_dir / "build" / "pyinstaller_hooks"
-    hook_dir.mkdir(parents=True, exist_ok=True)
-    hook_path = hook_dir / f"runtime_profile_{'_'.join(name_parts)}.py"
-    hook_path.write_text("".join(lines), encoding="utf-8")
-    return [str(hook_path)]
-
-
 _playwright_datas = _collect_playwright_browser_datas()
-_runtime_plan_hooks = _runtime_profile_hook_paths()
 
 
 a = Analysis(
@@ -157,7 +131,7 @@ a = Analysis(
     hiddenimports=[],
     hookspath=[],
     hooksconfig={},
-    runtime_hooks=_runtime_plan_hooks,
+    runtime_hooks=[],
     excludes=[],
     noarchive=False,
     optimize=0,

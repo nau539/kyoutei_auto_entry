@@ -725,3 +725,33 @@
   - C:\pleiades\2023-03\workspace\kyoutei\kyoutei_auto_entry\dist に KYOUTEI AI ZERO_v0.3.24.exe、KYOUTEI AI ZERO_v0.3.24_VERSION.txt、KYOUTEI AI ZERO_v0.3.24_CHANGELOG.md が存在することを確認
 - Open items:
   - なし
+
+## 2026-06-26
+- Task: AQUA EDGE AI への名称変更、認証切替、配色変更、Windows EXE作成
+- Summary: 商品名と配布名を AQUA EDGE AI へ変更し、利用者ID認証で auth_clear.py を使うようにした。画面配色は競艇向けに水色、青緑、紺を中心に調整した。Windows側で v0.3.25 の配布EXEを作成した。
+- Changed files: product_profile.py, ui/theme.py, ui/main_window.py, ui/views/dashboard_view.py, kyoutei_auto_entry.spec, tests/test_build_release.py, tests/test_config.py, tests/test_product_profile.py, README.md, VERSION.txt, docs/CHANGELOG_CUSTOMER.md, docs/PROJECT_CONTEXT.md, docs/WORKLOG.md, docs/LEARNINGS.md
+- Verification:
+  - Windows側で python -m py_compile main.py product_profile.py build_release.py ui\main_window.py ui\theme.py ui\views\dashboard_view.py tests\test_build_release.py tests\test_product_profile.py
+  - Windows側で python -m unittest discover -s tests -p test_product_profile.py -q
+  - Windows側で python -m unittest discover -s tests -p test_build_release.py -q
+  - Windows側で python -m unittest discover -s tests -p test_*.py -q
+  - Windows側で python build_release.py --spec kyoutei_auto_entry.spec --clean
+  - ui.main_window の認証モジュールが auth_clear、認証シート名が AQUA_EDGE_AI であることを確認
+  - C:\pleiades\2023-03\workspace\kyoutei\kyoutei_auto_entry\dist に AQUA EDGE AI_v0.3.25.exe、AQUA EDGE AI_v0.3.25_VERSION.txt、AQUA EDGE AI_v0.3.25_CHANGELOG.md が存在することを確認
+- Open items:
+  - Cドライブ側の作業フォルダは Git リポジトリではないため、commit と push は未実施。
+
+## 2026-06-26
+- Task: AQUA EDGE AI からプラン、利用枠、固定版分岐を削除
+- Summary: BRONZE、SILVER、GOLD のプラン表示、利用枠選択、固定プラン版や体験版のビルド分岐を削除した。Discord通知は利用枠で見送らず、AQUA EDGE AI としてそのまま受信する形に整理した。未使用になった旧ダッシュボードと確認ダイアログも削除した。
+- Changed files: product_profile.py, config.py, service.py, build_release.py, kyoutei_auto_entry.spec, ui/main_window.py, ui/views/dashboard_view.py, ui/views/classic_dashboard_view.py, ui/dialogs/confirm_dialog.py, tests/test_build_release.py, tests/test_config.py, tests/test_product_profile.py, tests/test_service_routing.py, README.md, VERSION.txt, docs/CHANGELOG_CUSTOMER.md, docs/PROJECT_CONTEXT.md, docs/WORKLOG.md, docs/LEARNINGS.md
+- Verification:
+  - Windows側で python -m py_compile product_profile.py config.py service.py build_release.py ui\main_window.py ui\views\dashboard_view.py tests\test_build_release.py tests\test_config.py tests\test_product_profile.py tests\test_service_routing.py
+  - Windows側で python -m unittest discover -s tests -p test_*.py -q
+  - Windows側でプラン、利用枠、固定版、体験版関連の残存キーワードを検索し、実行経路には残っていないことを確認
+  - Windows側で python build_release.py --spec kyoutei_auto_entry.spec --clean
+  - Windows側で python build_release.py --spec kyoutei_auto_entry.spec --dry-run
+  - ui.main_window の認証モジュールが auth_clear、認証シート名が AQUA_EDGE_AI であることを確認
+  - C:\pleiades\2023-03\workspace\kyoutei\kyoutei_auto_entry\dist に AQUA EDGE AI_v0.3.26.exe、AQUA EDGE AI_v0.3.26_VERSION.txt、AQUA EDGE AI_v0.3.26_CHANGELOG.md が存在することを確認
+- Open items:
+  - Cドライブ側の作業フォルダは Git リポジトリではないため、commit と push は未実施。

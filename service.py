@@ -24,7 +24,7 @@ from config import (
 from discord_client import DiscordClientError, DiscordGatewayClient
 from ipat_playwright import IpatEntryError, IpatPlaywrightExecutor, ThreadBoundIpatPlaywrightExecutor
 from payload_parser import extract_payloads_from_text
-from product_profile import infer_tool_slot_from_payload, selected_tool_slots, tool_slot_hour, tool_slot_label
+from product_profile import infer_tool_slot_from_payload, tool_slot_hour, tool_slot_label
 import secrets_local
 from strategy_modes import normalize_strategy_code
 
@@ -489,9 +489,6 @@ class AutoEntryService:
         name = str(payload.get("strategy_name", "") or strategy.get("name", "") or "").strip()
         return normalize_strategy_code(name, default="")
 
-    def _selected_tool_slots(self) -> list[str]:
-        return selected_tool_slots(getattr(self.settings, "entry", None))
-
     def _resolve_payload_tool_slot(self, payload: Dict[str, Any]) -> str:
         slot = infer_tool_slot_from_payload(payload)
         if slot:
@@ -499,15 +496,7 @@ class AutoEntryService:
         return ""
 
     def _accepts_payload_strategy(self, payload: Dict[str, Any]) -> tuple[bool, str]:
-        allowed = self._selected_tool_slots()
-        if len(allowed) >= 3:
-            return True, ""
-
-        slot = self._resolve_payload_tool_slot(payload)
-        if not slot:
-            return False, "選択ツール判定不可"
-        if slot not in allowed:
-            return False, f"選択外ツール: {tool_slot_label(slot) or slot}"
+        del payload
         return True, ""
 
     def _expected_central_sport(self) -> str:

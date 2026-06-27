@@ -6,14 +6,6 @@ from dataclasses import asdict, dataclass, field
 from pathlib import Path
 from typing import Any, Dict
 
-from product_profile import (
-    DEFAULT_PLAN_TIER,
-    TOOL_SLOT_ORDER,
-    effective_plan_tier,
-    manual_review_enabled,
-    normalize_plan_tier,
-    normalize_tool_slots,
-)
 from strategy_modes import DEFAULT_STRATEGY_CODE
 
 CONFIG_FILE = "kyoutei_auto_entry_config.json"
@@ -248,8 +240,6 @@ class EntrySettings:
     central_schedule_enabled: bool = True
     central_schedule_open_time: str = DEFAULT_CENTRAL_SCHEDULE_OPEN_TIME
     central_schedule_close_time: str = DEFAULT_CENTRAL_SCHEDULE_CLOSE_TIME
-    plan_tier: str = DEFAULT_PLAN_TIER
-    tool_slots: list[str] = field(default_factory=lambda: list(TOOL_SLOT_ORDER))
     dispatch_mode: str = DEFAULT_STRATEGY_CODE
 
 
@@ -334,16 +324,6 @@ def _coerce_entry(raw: Dict[str, Any]) -> EntrySettings:
             return str(default)
         return f"{int(hour):02d}:{int(minute):02d}"
 
-    plan_tier = effective_plan_tier(raw.get("plan_tier", DEFAULT_PLAN_TIER), default=DEFAULT_PLAN_TIER)
-    tool_slots_raw = None
-    for key in ("tool_slots", "enabled_tool_slots", "delivery_slots"):
-        if key in raw:
-            tool_slots_raw = raw.get(key)
-            break
-    tool_slots = normalize_tool_slots(tool_slots_raw, plan_tier, default=TOOL_SLOT_ORDER)
-
-    review_available = manual_review_enabled()
-
     return EntrySettings(
         fixed_ticket_yen=max(100, _safe_int(fixed_ticket_raw, 100)),
         raffine_budget_yen=max(100, _safe_int(raw.get("raffine_budget_yen"), 10000)),
@@ -360,7 +340,7 @@ def _coerce_entry(raw: Dict[str, Any]) -> EntrySettings:
         target_payout_ratio_pct=max(1.0, _safe_float(raw.get("target_payout_ratio_pct"), 1000.0)),
         target_payout_yen=max(100, _safe_int(raw.get("target_payout_yen"), 10000)),
         dry_run=False,
-        confirm_each_race=_safe_bool(raw.get("confirm_each_race"), True) if review_available else False,
+        confirm_each_race=False,
         show_ticket_preview_window=False,
         allocation_mode="target_payout",
         enable_central=True,
@@ -374,8 +354,6 @@ def _coerce_entry(raw: Dict[str, Any]) -> EntrySettings:
             DEFAULT_CENTRAL_SCHEDULE_CLOSE_TIME,
             DEFAULT_CENTRAL_SCHEDULE_CLOSE_TIME,
         ),
-        plan_tier=plan_tier,
-        tool_slots=tool_slots,
         # Hidden compatibility field. GUI and service no longer switch behavior by strategy.
         dispatch_mode=DEFAULT_STRATEGY_CODE,
     )

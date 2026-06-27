@@ -1,7 +1,5 @@
-import os
 import tempfile
 import unittest
-from unittest import mock
 from pathlib import Path
 
 from config import AppSettings, ensure_selectors_file, load_selectors, load_settings, save_settings
@@ -26,8 +24,6 @@ class ConfigTests(unittest.TestCase):
         self.assertTrue(settings.entry.central_schedule_enabled)
         self.assertEqual(settings.entry.central_schedule_open_time, "10:00")
         self.assertEqual(settings.entry.central_schedule_close_time, "21:00")
-        self.assertEqual(settings.entry.plan_tier, "gold")
-        self.assertEqual(settings.entry.tool_slots, ["morning", "daytime", "midnight"])
         self.assertEqual(settings.entry.dispatch_mode, "midnight_base")
         self.assertEqual(settings.entry.fixed_ticket_yen, 100)
         self.assertEqual(settings.entry.raffine_budget_yen, 10000)
@@ -79,8 +75,6 @@ class ConfigTests(unittest.TestCase):
             self.assertTrue(loaded.entry.central_schedule_enabled)
             self.assertEqual(loaded.entry.central_schedule_open_time, "10:00")
             self.assertEqual(loaded.entry.central_schedule_close_time, "21:00")
-            self.assertEqual(loaded.entry.plan_tier, "gold")
-            self.assertEqual(loaded.entry.tool_slots, ["morning", "daytime", "midnight"])
             self.assertEqual(loaded.entry.dispatch_mode, "midnight_base")
             self.assertEqual(loaded.entry.fixed_ticket_yen, 100)
             self.assertEqual(loaded.entry.raffine_budget_yen, 10000)
@@ -159,8 +153,6 @@ class ConfigTests(unittest.TestCase):
             self.assertTrue(loaded.entry.central_schedule_enabled)
             self.assertEqual(loaded.entry.central_schedule_open_time, "10:00")
             self.assertEqual(loaded.entry.central_schedule_close_time, "21:00")
-            self.assertEqual(loaded.entry.plan_tier, "gold")
-            self.assertEqual(loaded.entry.tool_slots, ["morning", "daytime", "midnight"])
 
     def test_hidden_target_payout_ratio_mode_is_ignored(self):
         with tempfile.TemporaryDirectory() as tmp_dir:
@@ -209,85 +201,6 @@ class ConfigTests(unittest.TestCase):
             cfg_path.write_text('{"entry":{"dispatch_mode":"all_stable"}}', encoding="utf-8")
             loaded = load_settings(cfg_path)
             self.assertEqual(loaded.entry.dispatch_mode, "midnight_base")
-
-    def test_plan_tier_and_tool_slots_are_normalized(self):
-        with tempfile.TemporaryDirectory() as tmp_dir:
-            cfg_path = Path(tmp_dir) / "kyoutei_auto_entry_config.json"
-            cfg_path.write_text(
-                '{"entry":{"plan_tier":"silver","tool_slots":["midnight","daytime","morning"]}}',
-                encoding="utf-8",
-            )
-            loaded = load_settings(cfg_path)
-            self.assertEqual(loaded.entry.plan_tier, "silver")
-            self.assertEqual(loaded.entry.tool_slots, ["daytime", "midnight"])
-
-    def test_gold_plan_forces_all_tool_slots(self):
-        with tempfile.TemporaryDirectory() as tmp_dir:
-            cfg_path = Path(tmp_dir) / "kyoutei_auto_entry_config.json"
-            cfg_path.write_text(
-                '{"entry":{"plan_tier":"gold","tool_slots":["morning"]}}',
-                encoding="utf-8",
-            )
-            loaded = load_settings(cfg_path)
-            self.assertEqual(loaded.entry.plan_tier, "gold")
-            self.assertEqual(loaded.entry.tool_slots, ["morning"])
-
-    def test_explicit_empty_tool_slots_are_preserved(self):
-        with tempfile.TemporaryDirectory() as tmp_dir:
-            cfg_path = Path(tmp_dir) / "kyoutei_auto_entry_config.json"
-            cfg_path.write_text(
-                '{"entry":{"plan_tier":"silver","tool_slots":[]}}',
-                encoding="utf-8",
-            )
-            loaded = load_settings(cfg_path)
-            self.assertEqual(loaded.entry.plan_tier, "silver")
-            self.assertEqual(loaded.entry.tool_slots, [])
-
-    def test_fixed_plan_env_overrides_saved_plan(self):
-        with tempfile.TemporaryDirectory() as tmp_dir:
-            cfg_path = Path(tmp_dir) / "kyoutei_auto_entry_config.json"
-            cfg_path.write_text(
-                '{"entry":{"plan_tier":"gold","tool_slots":["morning","daytime","midnight"]}}',
-                encoding="utf-8",
-            )
-            with mock.patch.dict(os.environ, {"KYOUTEI_AI_ZERO_FIXED_PLAN_TIER": "bronze"}, clear=False):
-                loaded = load_settings(cfg_path)
-            self.assertEqual(loaded.entry.plan_tier, "bronze")
-            self.assertEqual(loaded.entry.tool_slots, ["morning"])
-
-    def test_fixed_plan_env_defaults_to_manual_review(self):
-        with tempfile.TemporaryDirectory() as tmp_dir:
-            cfg_path = Path(tmp_dir) / "kyoutei_auto_entry_config.json"
-            cfg_path.write_text('{"entry":{"plan_tier":"silver","tool_slots":["daytime","midnight"]}}', encoding="utf-8")
-            with mock.patch.dict(os.environ, {"KYOUTEI_AI_ZERO_FIXED_PLAN_TIER": "silver"}, clear=False):
-                loaded = load_settings(cfg_path)
-            self.assertTrue(loaded.entry.confirm_each_race)
-
-    def test_fixed_plan_env_preserves_saved_auto_review_choice(self):
-        with tempfile.TemporaryDirectory() as tmp_dir:
-            cfg_path = Path(tmp_dir) / "kyoutei_auto_entry_config.json"
-            cfg_path.write_text(
-                '{"entry":{"plan_tier":"silver","tool_slots":["daytime","midnight"],"confirm_each_race":false}}',
-                encoding="utf-8",
-            )
-            with mock.patch.dict(os.environ, {"KYOUTEI_AI_ZERO_FIXED_PLAN_TIER": "silver"}, clear=False):
-                loaded = load_settings(cfg_path)
-            self.assertFalse(loaded.entry.confirm_each_race)
-
-    def test_classic_trial_env_keeps_auto_mode_even_with_fixed_plan(self):
-        with tempfile.TemporaryDirectory() as tmp_dir:
-            cfg_path = Path(tmp_dir) / "kyoutei_auto_entry_config.json"
-            cfg_path.write_text('{"entry":{"plan_tier":"gold","tool_slots":["morning","daytime","midnight"]}}', encoding="utf-8")
-            with mock.patch.dict(
-                os.environ,
-                {
-                    "KYOUTEI_AI_ZERO_FIXED_PLAN_TIER": "gold",
-                    "KYOUTEI_AI_ZERO_UI_VARIANT": "classic_trial",
-                },
-                clear=False,
-            ):
-                loaded = load_settings(cfg_path)
-            self.assertFalse(loaded.entry.confirm_each_race)
 
     def test_selectors_are_internal_only(self):
         with tempfile.TemporaryDirectory() as tmp_dir:

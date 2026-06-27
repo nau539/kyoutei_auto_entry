@@ -4,26 +4,18 @@ import logging
 import queue
 import threading
 from pathlib import Path
-from typing import Any, Callable, Dict, List
+from typing import Callable
 from tkinter import messagebox
 
 import customtkinter as ctk
 
 from config import AppSettings, CONFIG_FILE, load_settings, save_settings
 from product_profile import (
-    PRODUCT_NAME,
-    TOOL_SLOT_ORDER,
-    is_classic_trial,
-    manual_review_enabled,
-    plan_label,
-    plan_palette,
+    app_palette,
     runtime_product_name,
-    selected_tool_slots,
-    tool_slot_label,
 )
 from service import AutoEntryService
 from ui.components.status_bar import StatusBar
-from ui.dialogs.confirm_dialog import ConfirmDialog
 from ui.theme import (
     COLOR_ACCENT,
     COLOR_ACCENT_HOVER,
@@ -48,12 +40,11 @@ from ui.theme import (
     get_theme,
     set_theme,
 )
-from ui.views.classic_dashboard_view import ClassicDashboardView
 from ui.views.dashboard_view import DashboardView
 from ui.views.log_view import LogView
 
 try:
-    import auth as auth_module
+    import auth_clear as auth_module
 except Exception as _auth_import_exc:  # pragma: no cover
     auth_module = None
 else:
@@ -81,7 +72,6 @@ class AutoEntryApp(ctk.CTk):
         ctk.set_appearance_mode("System")
         super().__init__()
 
-        self._is_classic_trial = is_classic_trial()
         self.title(runtime_product_name())
         self.geometry("980x680")
         self.minsize(860, 580)
@@ -89,9 +79,6 @@ class AutoEntryApp(ctk.CTk):
 
         self._settings_file_exists_at_start = Path(CONFIG_FILE).exists()
         self.settings: AppSettings = load_settings()
-        if self._is_classic_trial:
-            self.settings.entry.plan_tier = "gold"
-            self.settings.entry.tool_slots = list(TOOL_SLOT_ORDER)
         saved_theme_mode = str(getattr(self.settings, "theme_mode", "system") or "system").strip().lower()
         if saved_theme_mode not in {"light", "dark", "system"}:
             saved_theme_mode = "system"
@@ -111,7 +98,7 @@ class AutoEntryApp(ctk.CTk):
 
         self._build_layout()
         self._sync_mode_badge()
-        self._apply_plan_palette()
+        self._apply_app_palette()
         saved_auth_user = str(getattr(getattr(self.settings, "auth", None), "user_id", "") or "").strip()
         if saved_auth_user:
             self._auth_user_var.set(saved_auth_user)
@@ -142,8 +129,7 @@ class AutoEntryApp(ctk.CTk):
         # Status bar
         self._status_bar = StatusBar(self, version=self._version)
         self._status_bar.grid(row=1, column=1, sticky="ew")
-        if self._is_classic_trial:
-            self._status_bar.set_profile_visible(False)
+        self._status_bar.set_profile_visible(False)
 
         self._build_sidebar()
 
@@ -151,23 +137,13 @@ class AutoEntryApp(ctk.CTk):
         self._views: Dict[str, ctk.CTkFrame] = {}
         self._current_view: str | None = None
 
-        if self._is_classic_trial:
-            self._dashboard_view = ClassicDashboardView(
-                self._content,
-                settings=self.settings,
-                on_start=self._start_service,
-                on_stop=self._stop_service,
-                on_save=self._save_from_ui,
-            )
-        else:
-            self._dashboard_view = DashboardView(
-                self._content,
-                settings=self.settings,
-                on_start=self._start_service,
-                on_stop=self._stop_service,
-                on_save=self._save_from_ui,
-                on_profile_change=self._on_dashboard_profile_change,
-            )
+        self._dashboard_view = DashboardView(
+            self._content,
+            settings=self.settings,
+            on_start=self._start_service,
+            on_stop=self._stop_service,
+            on_save=self._save_from_ui,
+        )
         self._views["dashboard"] = self._dashboard_view
 
         self._log_view = LogView(self._content)
@@ -178,33 +154,11 @@ class AutoEntryApp(ctk.CTk):
         self._sidebar_title = ctk.CTkLabel(
             self._sidebar, text=runtime_product_name(), font=FONT_TITLE, text_color=COLOR_ACCENT
         )
-        if self._is_classic_trial:
-            self._sidebar_title.pack(padx=16, pady=(20, 2))
-            self._sidebar_subtitle = ctk.CTkLabel(
-                self._sidebar, text="連携 → BOAT RACE", font=FONT_SMALL, text_color=COLOR_TEXT_MUTED
-            )
-            self._sidebar_subtitle.pack(padx=16, pady=(0, 20))
-        else:
-            self._sidebar_title.pack(padx=16, pady=(20, 10))
-
-            self._sidebar_plan_label = ctk.CTkLabel(
-                self._sidebar,
-                text="",
-                font=FONT_SMALL,
-                corner_radius=999,
-                padx=12,
-                pady=4,
-            )
-            self._sidebar_plan_label.pack(padx=16, pady=(0, 4))
-
-            self._sidebar_slot_label = ctk.CTkLabel(
-                self._sidebar,
-                text="",
-                font=FONT_SMALL,
-                text_color=COLOR_TEXT_MUTED,
-                justify="left",
-            )
-            self._sidebar_slot_label.pack(padx=16, pady=(0, 16))
+        self._sidebar_title.pack(padx=16, pady=(20, 2))
+        self._sidebar_subtitle = ctk.CTkLabel(
+            self._sidebar, text="連携 → BOAT RACE", font=FONT_SMALL, text_color=COLOR_TEXT_MUTED
+        )
+        self._sidebar_subtitle.pack(padx=16, pady=(0, 20))
 
         auth_wrap = ctk.CTkFrame(self._sidebar, fg_color="transparent")
         auth_wrap.pack(fill="x", padx=12, pady=(0, 12))
@@ -298,13 +252,9 @@ class AutoEntryApp(ctk.CTk):
             return
         if self._current_view == name:
             return
-        if self._is_classic_trial:
-            sidebar_active = COLOR_SIDEBAR_ACTIVE
-            sidebar_hover = COLOR_SIDEBAR_HOVER
-        else:
-            palette = plan_palette(getattr(self.settings.entry, "plan_tier", "gold"))
-            sidebar_active = palette["sidebar_active"]
-            sidebar_hover = palette["sidebar_hover"]
+        palette = app_palette()
+        sidebar_active = palette["sidebar_active"]
+        sidebar_hover = palette["sidebar_hover"]
         # Hide current
         if self._current_view and self._current_view in self._views:
             self._views[self._current_view].pack_forget()
@@ -350,36 +300,8 @@ class AutoEntryApp(ctk.CTk):
         if hasattr(self, "_dashboard_view"):
             self._dashboard_view.sync_mode(is_dry)
 
-    def _current_slot_summary(self) -> str:
-        labels = [tool_slot_label(slot) for slot in selected_tool_slots(self.settings.entry)]
-        return " / ".join([label for label in labels if label]) or "-"
-
-    def _apply_plan_palette(self) -> None:
-        if self._is_classic_trial:
-            if hasattr(self, "_sidebar_title"):
-                self._sidebar_title.configure(text_color=COLOR_ACCENT)
-            if hasattr(self, "_auth_button"):
-                self._auth_button.configure(
-                    fg_color=COLOR_ACCENT,
-                    hover_color=COLOR_ACCENT_HOVER,
-                    text_color=COLOR_TEXT_ON_ACCENT,
-                )
-            if hasattr(self, "_theme_seg"):
-                self._theme_seg.configure(
-                    selected_color=COLOR_SEG_SELECTED,
-                    selected_hover_color=COLOR_SEG_SELECTED_HOVER,
-                    unselected_color=COLOR_SEG_UNSELECTED,
-                    unselected_hover_color=COLOR_SEG_UNSELECTED_HOVER,
-                    text_color=COLOR_SEG_TEXT,
-                )
-            for key, btn in getattr(self, "_nav_buttons", {}).items():
-                if key == self._current_view:
-                    btn.configure(fg_color=COLOR_SIDEBAR_ACTIVE, hover_color=COLOR_SIDEBAR_HOVER)
-                else:
-                    btn.configure(hover_color=COLOR_SIDEBAR_HOVER)
-            return
-
-        palette = plan_palette(getattr(self.settings.entry, "plan_tier", "gold"))
+    def _apply_app_palette(self) -> None:
+        palette = app_palette()
         accent = palette["accent"]
         accent_hover = palette["accent_hover"]
         sidebar_active = palette["sidebar_active"]
@@ -387,19 +309,6 @@ class AutoEntryApp(ctk.CTk):
 
         if hasattr(self, "_sidebar_title"):
             self._sidebar_title.configure(text_color=accent)
-        if hasattr(self, "_sidebar_plan_label"):
-            self._sidebar_plan_label.configure(
-                text=plan_label(getattr(self.settings.entry, "plan_tier", "gold")),
-                fg_color=palette["badge_fg"],
-                text_color=palette["badge_text"],
-            )
-        if hasattr(self, "_sidebar_slot_label"):
-            self._sidebar_slot_label.configure(text=f"利用枠: {self._current_slot_summary()}")
-        if hasattr(self, "_status_bar") and self._status_bar is not None:
-            self._status_bar.update_profile(
-                f"{plan_label(getattr(self.settings.entry, 'plan_tier', 'gold'))} | {self._current_slot_summary()}",
-                text_color=accent,
-            )
         if hasattr(self, "_auth_button"):
             self._auth_button.configure(
                 fg_color=accent,
@@ -419,13 +328,6 @@ class AutoEntryApp(ctk.CTk):
                 btn.configure(fg_color=sidebar_active, hover_color=sidebar_hover)
             else:
                 btn.configure(hover_color=sidebar_hover)
-
-    def _on_dashboard_profile_change(self, tier: str, slots: list[str]) -> None:
-        if self._is_classic_trial:
-            return
-        self.settings.entry.plan_tier = str(tier or "").strip().lower() or getattr(self.settings.entry, "plan_tier", "gold")
-        self.settings.entry.tool_slots = list(slots or [])
-        self._apply_plan_palette()
 
     # ------------------------------------------------------------------
     # Authentication
@@ -574,7 +476,7 @@ class AutoEntryApp(ctk.CTk):
         self._dashboard_view.collect_to_settings(self.settings)
         save_settings(self.settings)
         self._sync_mode_badge()
-        self._apply_plan_palette()
+        self._apply_app_palette()
         if show_log:
             self._log_line("設定を保存しました")
         if show_dialog:
@@ -585,7 +487,7 @@ class AutoEntryApp(ctk.CTk):
     # ------------------------------------------------------------------
 
     def _ensure_service_instance(self) -> AutoEntryService:
-        review_func = self._review_payload if self._manual_review_enabled() else None
+        review_func = None
         if self.service is None:
             self.service = AutoEntryService(
                 self.settings,
@@ -597,9 +499,6 @@ class AutoEntryApp(ctk.CTk):
             self.service.log_func = self._service_log
             self.service.review_func = review_func
         return self.service
-
-    def _manual_review_enabled(self) -> bool:
-        return manual_review_enabled(classic_trial=self._is_classic_trial)
 
     def _set_service_busy(self, busy: bool) -> None:
         self._service_op_in_progress = bool(busy)
@@ -700,63 +599,6 @@ class AutoEntryApp(ctk.CTk):
         self._status_bar.update_discord(False)
         if hasattr(self, "_dashboard_view"):
             self._dashboard_view.update_discord(False)
-
-    # ------------------------------------------------------------------
-    # Review callback (called from service worker thread)
-    # ------------------------------------------------------------------
-
-    def _review_payload(
-        self,
-        payload: Dict[str, Any],
-        tickets: List[Dict[str, Any]],
-        total_yen: int,
-        require_confirm: bool,
-        show_window: bool,
-    ) -> bool:
-        del total_yen, show_window
-        if not require_confirm:
-            return True
-
-        result: Dict[str, bool] = {"ok": False}
-        done = threading.Event()
-
-        def _show_dialog() -> None:
-            try:
-                result["ok"] = self._show_confirm_review(payload, tickets)
-            except Exception:
-                logger.exception("review dialog error")
-                result["ok"] = False
-            finally:
-                done.set()
-
-        self.after(0, _show_dialog)
-        done.wait(timeout=600.0)
-        return bool(result["ok"])
-
-    def _show_confirm_review(self, payload: Dict[str, Any], tickets: List[Dict[str, Any]]) -> bool:
-        from ui.dialogs.simulator_dialog import build_preview_text
-
-        mode = str(getattr(self.settings.entry, "allocation_mode", "target_payout") or "target_payout")
-        target_payout_mode = str(getattr(self.settings.entry, "target_payout_mode", "yen") or "yen")
-        target_payout_ratio_pct = float(getattr(self.settings.entry, "target_payout_ratio_pct", 1000.0) or 1000.0)
-        target_payout_yen = int(getattr(self.settings.entry, "target_payout_yen", 10000) or 10000)
-        text = build_preview_text(
-            payload,
-            tickets,
-            mode,
-            target_payout_yen=target_payout_yen,
-            target_payout_mode=target_payout_mode,
-            target_payout_ratio_pct=target_payout_ratio_pct,
-        )
-        dlg = ConfirmDialog(
-            self,
-            title="レース実行確認",
-            message=f"{text}\n\nこの内容で投票しますか？",
-            confirm_text="投票する",
-            cancel_text="見送る",
-        )
-        self.wait_window(dlg)
-        return bool(dlg.result)
 
     # ------------------------------------------------------------------
     # Logging

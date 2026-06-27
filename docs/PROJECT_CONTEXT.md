@@ -11,7 +11,10 @@
 ## 現在の状態
 
 - リポジトリ構成は `keirin_auto_entry` を土台にコピーして作成した
+- 商品名は AQUA EDGE AI
+- BRONZE、SILVER、GOLD などのプラン区分や利用枠選択は使わない
 - 中央投票の主対象は競艇へ置き換え済み
+- 利用者ID認証は auth_clear.py を使い、AQUA_EDGE_AI シートを参照する
 - 受信側は JSON だけでなく、`kyoutei_bunseki` のプレーンテキスト通知も読める
 - 候補通知は `pre_race_candidates` として扱い、ログ反映とブラウザ起動制御だけを行う
 - 最終通知は `entry_tickets` として扱い、中央発注キューへ投入する

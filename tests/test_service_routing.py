@@ -322,8 +322,6 @@ class ServiceRoutingTests(unittest.TestCase):
         settings = AppSettings()
         settings.entry.enable_central = True
         settings.entry.enable_local = False
-        settings.entry.plan_tier = "bronze"
-        settings.entry.tool_slots = ["daytime"]
         logs = []
         svc = AutoEntryService(settings, logs.append)
 
@@ -802,13 +800,11 @@ class ServiceRoutingTests(unittest.TestCase):
         self.assertEqual(command, svc.CMD_PAYLOAD)
         self.assertEqual(envelope["payload"].get("strategy_code"), "midnight_attack")
 
-    def test_entry_payload_is_skipped_when_selected_tool_slot_differs(self):
+    def test_entry_payload_is_accepted_without_tool_slot_filter(self):
         self._set_channels(central=["100"], local=["200"], legacy=[])
         settings = AppSettings()
         settings.entry.enable_central = True
         settings.entry.enable_local = False
-        settings.entry.plan_tier = "bronze"
-        settings.entry.tool_slots = ["morning"]
         logs = []
         svc = AutoEntryService(settings, logs.append)
 
@@ -823,17 +819,15 @@ class ServiceRoutingTests(unittest.TestCase):
             }
         )
 
-        self.assertTrue(any("選択外ツール: 日中" in line for line in logs))
-        with self.assertRaises(queue.Empty):
-            svc._queues[svc.TARGET_CENTRAL].get_nowait()
+        command, envelope = svc._queues[svc.TARGET_CENTRAL].get_nowait()
+        self.assertEqual(command, svc.CMD_PAYLOAD)
+        self.assertEqual(envelope["payload"].get("strategy_code"), "daytime_consistent_earnings")
 
-    def test_pre_race_candidates_is_skipped_when_selected_tool_slot_differs(self):
+    def test_pre_race_candidates_is_accepted_without_tool_slot_filter(self):
         self._set_channels(central=["100"], local=["200"], legacy=[])
         settings = AppSettings()
         settings.entry.enable_central = True
         settings.entry.enable_local = False
-        settings.entry.plan_tier = "bronze"
-        settings.entry.tool_slots = ["midnight"]
         logs = []
         svc = AutoEntryService(settings, logs.append)
 
@@ -856,9 +850,11 @@ class ServiceRoutingTests(unittest.TestCase):
             }
         )
 
-        self.assertTrue(any("選択外ツール: モーニング" in line for line in logs))
-        with self.assertRaises(queue.Empty):
-            svc._queues[svc.TARGET_CENTRAL].get_nowait()
+        command, envelope = svc._queues[svc.TARGET_CENTRAL].get_nowait()
+        self.assertEqual(command, svc.CMD_CANDIDATE_CONTROL)
+        self.assertEqual(envelope.get("candidate_count"), 0)
+        self.assertTrue(any("事前候補受信 [モーニング]" in line for line in logs))
+        self.assertTrue(any("候補なし" in line for line in logs))
 
     def test_replay_pre_race_candidates_from_history(self):
         self._set_channels(central=["100"], local=["200"], legacy=[])

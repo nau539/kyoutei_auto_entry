@@ -1,80 +1,48 @@
-import os
 import unittest
-from unittest import mock
 
 from product_profile import (
-    build_trial_app_name,
-    manual_review_enabled,
-    plan_label,
-    raw_plan_label,
+    app_palette,
+    infer_tool_slot_from_candidate_payload,
+    infer_tool_slot_from_entry_payload,
+    normalize_tool_slot,
     runtime_log_basename,
     runtime_product_name,
-    update_tool_slot_selection,
+    tool_slot_hour,
+    tool_slot_label,
 )
 
 
 class ProductProfileTests(unittest.TestCase):
-    def test_raw_plan_label_is_not_overridden_by_fixed_plan_env(self):
-        with mock.patch.dict(os.environ, {"KYOUTEI_AI_ZERO_FIXED_PLAN_TIER": "silver"}, clear=False):
-            self.assertEqual(plan_label("gold"), "SILVER")
-            self.assertEqual(raw_plan_label("gold"), "GOLD")
+    def test_runtime_names_are_single_product_names(self):
+        self.assertEqual(runtime_product_name(), "AQUA EDGE AI")
+        self.assertEqual(runtime_log_basename(), "aqua_edge_ai")
 
-    def test_silver_slot_selection_can_return_from_midnight_pair(self):
-        slots = ["morning", "daytime"]
-        slots = update_tool_slot_selection(slots, "midnight", "silver")
-        self.assertEqual(slots, ["morning", "daytime"])
+    def test_tool_slot_aliases_are_normalized_for_message_routing(self):
+        self.assertEqual(normalize_tool_slot("モーニング"), "morning")
+        self.assertEqual(normalize_tool_slot("daytime_consistent_earnings"), "daytime")
+        self.assertEqual(normalize_tool_slot("attack"), "midnight")
+        self.assertEqual(tool_slot_label("midnight_attack"), "ミッドナイト")
+        self.assertEqual(tool_slot_hour("daytime"), 10)
 
-        slots = update_tool_slot_selection(slots, "daytime", "silver")
-        self.assertEqual(slots, ["morning"])
+    def test_candidate_payload_slot_can_be_inferred_from_requested_time(self):
+        payload = {
+            "message_type": "pre_race_candidates",
+            "requested_at": "2026-03-15 08:00:00",
+            "filters": {},
+        }
+        self.assertEqual(infer_tool_slot_from_candidate_payload(payload), "morning")
 
-        slots = update_tool_slot_selection(slots, "midnight", "silver")
-        self.assertEqual(slots, ["morning", "midnight"])
+    def test_entry_payload_slot_can_be_inferred_from_strategy(self):
+        payload = {
+            "strategy_code": "daytime_consistent_earnings",
+            "strategy_name": "日中収益主軸",
+        }
+        self.assertEqual(infer_tool_slot_from_entry_payload(payload), "daytime")
 
-        slots = update_tool_slot_selection(slots, "morning", "silver")
-        self.assertEqual(slots, ["midnight"])
-
-        slots = update_tool_slot_selection(slots, "daytime", "silver")
-        self.assertEqual(slots, ["midnight", "daytime"])
-
-    def test_bronze_selection_replaces_existing_slot_when_switching(self):
-        slots = ["morning"]
-        slots = update_tool_slot_selection(slots, "daytime", "bronze")
-        self.assertEqual(slots, ["daytime"])
-
-        slots = update_tool_slot_selection(slots, "daytime", "bronze")
-        self.assertEqual(slots, [])
-
-    def test_classic_trial_runtime_names(self):
-        with mock.patch.dict(os.environ, {"KYOUTEI_AI_ZERO_UI_VARIANT": "classic_trial"}, clear=False):
-            self.assertEqual(runtime_product_name(), "kyoutei_auto_entry")
-            self.assertEqual(runtime_log_basename(), "kyoutei_auto_entry_trial")
-            self.assertEqual(build_trial_app_name(), "kyoutei_auto_entry_trial")
-
-    def test_fixed_plan_enables_manual_review(self):
-        with mock.patch.dict(os.environ, {"KYOUTEI_AI_ZERO_FIXED_PLAN_TIER": "silver"}, clear=False):
-            self.assertTrue(manual_review_enabled())
-
-    def test_classic_trial_disables_manual_review_even_with_fixed_plan(self):
-        with mock.patch.dict(
-            os.environ,
-            {
-                "KYOUTEI_AI_ZERO_FIXED_PLAN_TIER": "gold",
-                "KYOUTEI_AI_ZERO_UI_VARIANT": "classic_trial",
-            },
-            clear=False,
-        ):
-            self.assertFalse(manual_review_enabled())
-
-    def test_gold_selection_is_toggle_based_up_to_three(self):
-        slots: list[str] = []
-        slots = update_tool_slot_selection(slots, "morning", "gold")
-        self.assertEqual(slots, ["morning"])
-
-        slots = update_tool_slot_selection(slots, "daytime", "gold")
-        self.assertEqual(slots, ["morning", "daytime"])
-
-        slots = update_tool_slot_selection(slots, "morning", "gold")
-        self.assertEqual(slots, ["daytime"])
+    def test_app_palette_exposes_aqua_accent(self):
+        palette = app_palette()
+        self.assertIn("accent", palette)
+        self.assertEqual(palette["accent"][0], "#008BC7")
 
 
 if __name__ == "__main__":
