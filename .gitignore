@@ -45,3 +45,5 @@ temp/
 cache/
 auth_clear.py
 auth_master.py
+auth_*.py
+auth-*.py
