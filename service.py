@@ -1308,18 +1308,25 @@ class AutoEntryService:
         detail = f"（目標払戻{target_payout:,}円に対して{ratio_text}%）"
         return abort_total, detail
 
+    def _uses_notified_ticket_amounts(self, payload: Dict[str, Any]) -> bool:
+        provider = str(payload.get("provider", "") or "").strip().lower()
+        source = str(payload.get("source", "") or "").strip().lower()
+        message_type = str(payload.get("message_type", "entry_tickets") or "entry_tickets").strip().lower()
+        return provider == "kyoutei" and source == "discord_text" and message_type == "entry_tickets"
+
     def _prepare_tickets(self, payload: Dict) -> List[Dict]:
         entry = self.settings.entry
         payload_tickets = payload.get("tickets") if isinstance(payload.get("tickets"), list) else []
         fixed_ticket = int(getattr(entry, "fixed_ticket_yen", 100) or 100)
         fixed_ticket = max(100, fixed_ticket)
-        # Discord側の金額は使用せず、keirin_auto_entry側ルールで配分する。
+        use_notified_amounts = self._uses_notified_ticket_amounts(payload)
         base_tickets: List[Dict[str, Any]] = []
         for row in payload_tickets:
             if not isinstance(row, dict):
                 continue
             copied = dict(row)
-            copied["bet_yen"] = fixed_ticket
+            if not use_notified_amounts:
+                copied["bet_yen"] = fixed_ticket
             base_tickets.append(copied)
 
         rows = apply_entry_rules(
@@ -1330,6 +1337,9 @@ class AutoEntryService:
             race_cap_yen=entry.race_cap_yen,
             max_tickets=entry.max_tickets,
         )
+        if use_notified_amounts:
+            return rows
+
         allocation_mode = str(getattr(entry, "allocation_mode", "target_payout") or "target_payout").strip().lower()
         if allocation_mode in {"current", "ratio"}:
             allocation_mode = "flat"
@@ -1368,7 +1378,7 @@ class AutoEntryService:
             reasons: List[str] = []
             if int(entry.max_tickets or 0) > 0:
                 reasons.append(f"最大点数={int(entry.max_tickets)}")
-            if int(getattr(entry, "fixed_ticket_yen", 100) or 100) > 0:
+            if (not self._uses_notified_ticket_amounts(payload)) and int(getattr(entry, "fixed_ticket_yen", 100) or 100) > 0:
                 reasons.append(f"固定投票金額={int(getattr(entry, 'fixed_ticket_yen', 100) or 100)}円")
             if int(entry.ticket_cap_yen or 0) > 0:
                 reasons.append(f"1点上限={int(entry.ticket_cap_yen)}円")
