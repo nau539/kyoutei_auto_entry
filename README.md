@@ -85,10 +85,21 @@ secrets_local.py に少なくとも以下を設定します。
 
 ## ビルド
 
-EXEを作る場合:
+エディション別に4本作る。エディションはEXE名（GOLD/SILVER/BRONZE/KYOUTEI）から実行時に自動判定する。
 
-1. cd /home/user/src/kyoutei/kyoutei_auto_entry
-2. python3 build_release.py --spec kyoutei_auto_entry.spec --clean
+- GOLD（券種 最大3種・認証 auth_clear）: `python build_release.py --app-name "AQUA EDGE AI_GOLD" --clean`
+- SILVER（最大2種・auth_clear）: `python build_release.py --app-name "AQUA EDGE AI_SILVER" --clean`
+- BRONZE（最大1種・auth_clear）: `python build_release.py --app-name "AQUA EDGE AI_BRONZE" --clean`
+- KYOUTEI（自分用デモ・最大3種・認証 auth_master）: `python build_release.py --app-name "KYOUTEI" --clean`
+
+4本まとめてビルドする場合は `bash build_all_editions.sh`。
+
+- エディションごとに、同時に選べる券種（2連複/3連複/3連単）の上限が変わる。選んだ券種の通知だけをキャッチ・自動入力する。
+- 開発時に手元で挙動を切り替えるには環境変数 `APP_EDITION=GOLD|SILVER|BRONZE|DEMO` を指定する（EXE名判定より優先）。
+
+### 送信側（kyoutei_bunseki）
+- 通知は `aqua3` 戦略（ナイター・信頼度0.86・2連複/3連複/3連単を同時通知・100円固定）を使う。
+- cron は `dispatch-pick --strategy aqua3 ...` / `dispatch-watch --strategy aqua3 ...`。投資額は受信側で調整する前提で100円固定で送る。
 
 ## 現状の注意点
 
