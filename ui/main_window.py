@@ -12,7 +12,6 @@ import customtkinter as ctk
 from config import AppSettings, CONFIG_FILE, load_settings, save_settings
 from product_profile import (
     app_palette,
-    edition_requires_auth,
     runtime_product_name,
     tier_accent,
     tier_label,
@@ -47,7 +46,14 @@ from ui.views.dashboard_view import DashboardView
 from ui.views.log_view import LogView
 
 try:
-    import auth_clear as auth_module
+    import importlib
+
+    from product_profile import edition_auth_module as _edition_auth_module
+
+    # エディションに応じて認証バックエンドを切り替える。
+    #   GOLD/SILVER/BRONZE -> auth_clear（顧客向けシート）
+    #   DEMO(KYOUTEI)      -> auth_master（自分用 master シート）
+    auth_module = importlib.import_module(_edition_auth_module())
 except Exception as _auth_import_exc:  # pragma: no cover
     auth_module = None
 else:
@@ -96,9 +102,7 @@ class AutoEntryApp(ctk.CTk):
         self._stat_skipped = 0
         self._discord_connected = False
         self._auth_in_progress = False
-        # デモ版(KYOUTEI)は認証不要。最初から認証済み扱いにする。
-        self._auth_required = bool(edition_requires_auth())
-        self._is_authenticated = not self._auth_required
+        self._is_authenticated = False
         self._service_op_in_progress = False
 
         self._build_layout()
@@ -359,15 +363,6 @@ class AutoEntryApp(ctk.CTk):
             self._set_buttons_enabled(child, enabled, exclude)
 
     def _apply_auth_lock_state(self) -> None:
-        if not self._auth_required:
-            # デモ版: 認証ロックなし。認証UIは無効化して「デモ版」表示にする。
-            self._is_authenticated = True
-            self._set_buttons_enabled(self, True, {self._auth_button})
-            self._auth_user_entry.configure(state="disabled")
-            self._auth_button.configure(state="disabled")
-            self._auth_status_label.configure(text="デモ版（認証不要）", text_color=COLOR_TEXT_MUTED)
-            self._dashboard_view.set_running(bool(self.service and self.service.running))
-            return
         enabled = bool(self._is_authenticated)
         exclude = {self._auth_button}
         self._set_buttons_enabled(self, enabled, exclude)
@@ -418,8 +413,6 @@ class AutoEntryApp(ctk.CTk):
         return True
 
     def _try_auto_auth_on_startup(self) -> None:
-        if not self._auth_required:
-            return
         if self._is_authenticated or self._auth_in_progress:
             return
         auth_settings = getattr(self.settings, "auth", None)

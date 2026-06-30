@@ -4,6 +4,7 @@ from product_profile import (
     app_palette,
     clamp_enabled_bet_types,
     default_enabled_bet_types,
+    edition_auth_module,
     edition_profile,
     edition_requires_auth,
     infer_tool_slot_from_candidate_payload,
@@ -29,8 +30,13 @@ class ProductProfileTests(unittest.TestCase):
         self.assertEqual(max_bet_types("SILVER"), 2)
         self.assertEqual(max_bet_types("BRONZE"), 1)
         self.assertEqual(max_bet_types("DEMO"), 3)
+        # 全エディションが認証する。顧客向けは auth_clear、自分用デモは auth_master。
         self.assertTrue(edition_requires_auth("GOLD"))
-        self.assertFalse(edition_requires_auth("DEMO"))
+        self.assertTrue(edition_requires_auth("DEMO"))
+        self.assertEqual(edition_auth_module("GOLD"), "auth_clear")
+        self.assertEqual(edition_auth_module("SILVER"), "auth_clear")
+        self.assertEqual(edition_auth_module("BRONZE"), "auth_clear")
+        self.assertEqual(edition_auth_module("DEMO"), "auth_master")
         self.assertEqual(edition_profile("DEMO")["exe_basename"], "KYOUTEI")
         self.assertEqual(edition_profile("GOLD")["exe_basename"], "AQUA EDGE AI_GOLD")
 

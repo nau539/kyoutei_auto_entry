@@ -21,6 +21,8 @@ EDITIONS: dict[str, dict[str, Any]] = {
         "log_basename": "aqua_edge_ai_gold",
         "max_bet_types": 3,
         "require_auth": True,
+        # 顧客向けは AQUA_EDGE_AI 認証シート(auth_clear)。
+        "auth_module": "auth_clear",
         # (light, dark) のアクセント。アクア基調にゴールドを重ねる。
         "tier_accent": ("#C8A22B", "#F4D469"),
         "tier_label": "GOLD",
@@ -31,6 +33,7 @@ EDITIONS: dict[str, dict[str, Any]] = {
         "log_basename": "aqua_edge_ai_silver",
         "max_bet_types": 2,
         "require_auth": True,
+        "auth_module": "auth_clear",
         "tier_accent": ("#7C879A", "#C5D6E2"),
         "tier_label": "SILVER",
     },
@@ -40,6 +43,7 @@ EDITIONS: dict[str, dict[str, Any]] = {
         "log_basename": "aqua_edge_ai_bronze",
         "max_bet_types": 1,
         "require_auth": True,
+        "auth_module": "auth_clear",
         "tier_accent": ("#A9692E", "#DFA468"),
         "tier_label": "BRONZE",
     },
@@ -48,7 +52,9 @@ EDITIONS: dict[str, dict[str, Any]] = {
         "exe_basename": "KYOUTEI",
         "log_basename": "kyoutei",
         "max_bet_types": 3,
-        "require_auth": False,
+        "require_auth": True,
+        # 自分用デモは master 認証シート(auth_master)。
+        "auth_module": "auth_master",
         "tier_accent": ("#008BC7", "#4FD8FF"),
         "tier_label": "DEMO",
     },
@@ -98,6 +104,15 @@ def max_bet_types(edition: str | None = None) -> int:
 
 def edition_requires_auth(edition: str | None = None) -> bool:
     return bool(edition_profile(edition).get("require_auth", True))
+
+
+def edition_auth_module(edition: str | None = None) -> str:
+    """エディションが使う認証モジュール名。
+
+    GOLD/SILVER/BRONZE は auth_clear（顧客向け AQUA_EDGE_AI シート）、
+    DEMO(KYOUTEI) は auth_master（自分用 master シート）。
+    """
+    return str(edition_profile(edition).get("auth_module", "auth_clear"))
 
 
 def tier_accent(edition: str | None = None) -> tuple[str, str]:
