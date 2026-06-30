@@ -1,0 +1,11 @@
+{
+  "permissions": {
+    "allow": [
+      "WebSearch",
+      "WebFetch(domain:customtkinter.tomschimansky.com)",
+      "Bash(pip install:*)",
+      "Bash(python:*)",
+      "Bash(python3:*)"
+    ]
+  }
+}

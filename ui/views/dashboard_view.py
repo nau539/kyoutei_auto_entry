@@ -5,7 +5,15 @@ from typing import Any, Callable, List
 import customtkinter as ctk
 
 from config import DEFAULT_CENTRAL_SCHEDULE_CLOSE_TIME, DEFAULT_CENTRAL_SCHEDULE_OPEN_TIME, AppSettings
-from product_profile import PRODUCT_NAME, app_palette
+from product_profile import (
+    BET_TYPES,
+    PRODUCT_NAME,
+    app_palette,
+    clamp_enabled_bet_types,
+    default_enabled_bet_types,
+    max_bet_types,
+    tier_label,
+)
 from ui.components.card_frame import CardFrame
 from ui.theme import (
     COLOR_CARD_BG,
@@ -177,6 +185,33 @@ class DashboardView(ctk.CTkFrame):
         )
         self._rule_note.pack(anchor="w", pady=(6, 0))
 
+        # 通知券種の選択（グレードで上限件数が決まる）
+        cap = max_bet_types()
+        bet_card = CardFrame(scroll, title=f"通知券種（{tier_label()}：最大{cap}種）")
+        bet_card.pack(fill="x", pady=(0, 12))
+        self._bet_type_vars: dict[str, ctk.BooleanVar] = {}
+        self._bet_type_boxes: dict[str, ctk.CTkCheckBox] = {}
+        row = ctk.CTkFrame(bet_card.body, fg_color="transparent")
+        row.pack(fill="x")
+        for bt in BET_TYPES:
+            var = ctk.BooleanVar(value=False)
+            box = ctk.CTkCheckBox(
+                row, text=bt, variable=var, font=FONT_BODY,
+                command=lambda b=bt: self._on_bet_type_toggle(b),
+            )
+            box.pack(side="left", padx=(0, 18), pady=4)
+            self._bet_type_vars[bt] = var
+            self._bet_type_boxes[bt] = box
+        self._bet_type_note = ctk.CTkLabel(
+            bet_card.body,
+            text=f"選択した券種の通知だけを取り込みます（最大{cap}種）。",
+            font=FONT_SMALL,
+            text_color=COLOR_TEXT_MUTED,
+            anchor="w",
+            justify="left",
+        )
+        self._bet_type_note.pack(anchor="w", pady=(6, 0))
+
         activity_card = CardFrame(scroll, title="最近のログ")
         activity_card.pack(fill="x", pady=(0, 8))
 
@@ -262,6 +297,12 @@ class DashboardView(ctk.CTkFrame):
         self._vars["target_payout_yen"].set(str(int(getattr(settings.entry, "target_payout_yen", 10000) or 10000)))
         self._vars["entry_abort_total_yen"].set(str(int(getattr(settings.entry, "entry_abort_total_yen", 10000) or 0)))
 
+        enabled = getattr(settings.entry, "enabled_bet_types", None)
+        enabled = clamp_enabled_bet_types(enabled) if enabled is not None else default_enabled_bet_types()
+        for bt, var in getattr(self, "_bet_type_vars", {}).items():
+            var.set(bt in enabled)
+        self._apply_bet_type_cap_state()
+
     def collect_to_settings(self, settings: AppSettings) -> None:
         settings.ipat.login_url = str(self._vars["login_url"].get() or "").strip()
         settings.ipat.inet_id = str(self._vars["inet_id"].get() or "").strip()
@@ -300,6 +341,34 @@ class DashboardView(ctk.CTkFrame):
         settings.entry.central_schedule_enabled = True
         settings.entry.central_schedule_open_time = DEFAULT_CENTRAL_SCHEDULE_OPEN_TIME
         settings.entry.central_schedule_close_time = DEFAULT_CENTRAL_SCHEDULE_CLOSE_TIME
+        settings.entry.enabled_bet_types = self._selected_bet_types()
+
+    # --- 通知券種（グレード上限） -------------------------------------
+    def _selected_bet_types(self) -> list:
+        chosen = [bt for bt in BET_TYPES if self._bet_type_vars.get(bt) and self._bet_type_vars[bt].get()]
+        return clamp_enabled_bet_types(chosen)
+
+    def _on_bet_type_toggle(self, bet_type: str) -> None:
+        cap = max_bet_types()
+        chosen = [bt for bt in BET_TYPES if self._bet_type_vars[bt].get()]
+        if len(chosen) > cap:
+            # 上限超過: 今押したものを取り消す
+            self._bet_type_vars[bet_type].set(False)
+        self._apply_bet_type_cap_state()
+
+    def _apply_bet_type_cap_state(self) -> None:
+        cap = max_bet_types()
+        chosen = [bt for bt in BET_TYPES if self._bet_type_vars[bt].get()]
+        at_cap = len(chosen) >= cap
+        for bt, box in self._bet_type_boxes.items():
+            # 上限に達したら未選択の券種は押せないようにする
+            if at_cap and not self._bet_type_vars[bt].get():
+                box.configure(state="disabled")
+            else:
+                box.configure(state="normal")
+        self._bet_type_note.configure(
+            text=f"選択中 {len(chosen)}/{cap} 種：{'・'.join(chosen) or 'なし'}"
+        )
 
     def sync_mode(self, _is_dry_run: bool) -> None:
         return

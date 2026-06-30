@@ -24,7 +24,13 @@ from config import (
 from discord_client import DiscordClientError, DiscordGatewayClient
 from ipat_playwright import IpatEntryError, IpatPlaywrightExecutor, ThreadBoundIpatPlaywrightExecutor
 from payload_parser import extract_payloads_from_text
-from product_profile import infer_tool_slot_from_payload, tool_slot_hour, tool_slot_label
+from product_profile import (
+    clamp_enabled_bet_types,
+    infer_tool_slot_from_payload,
+    normalize_bet_type,
+    tool_slot_hour,
+    tool_slot_label,
+)
 import secrets_local
 from strategy_modes import normalize_strategy_code
 
@@ -533,6 +539,34 @@ class AutoEntryService:
                 markets.append(market)
         return markets
 
+    def _enabled_bet_types(self) -> list[str]:
+        """エディションの上限内で、ユーザーが選択した券種（正規化済み）。"""
+        raw = getattr(self.settings.entry, "enabled_bet_types", None)
+        return clamp_enabled_bet_types(raw if raw is not None else [])
+
+    def _accepts_payload_bet_types(self, payload: Dict[str, Any]) -> tuple[bool, str]:
+        """選択券種のチケットだけを残す。残ればpayloadを書き換えてTrue。
+
+        - 選択0件 → すべて見送り。
+        - 券種情報を持たないpayload（候補のみ等）は素通し。
+        - 取り扱い対象(2連複/3連複/3連単)のチケットが1つも選択券種に該当しなければ見送り。
+        """
+        enabled = set(self._enabled_bet_types())
+        tickets = payload.get("tickets") if isinstance(payload.get("tickets"), list) else []
+        if not tickets:
+            return True, ""
+        # この商品ラインで扱う券種のチケットだけを対象に判定する。
+        managed = [t for t in tickets if isinstance(t, dict) and normalize_bet_type(t.get("market", ""))]
+        if not managed:
+            return True, ""
+        if not enabled:
+            return False, "選択券種が0件です"
+        kept = [t for t in managed if normalize_bet_type(t.get("market", "")) in enabled]
+        if not kept:
+            return False, f"選択券種外(有効={'/'.join(sorted(enabled)) or 'なし'})"
+        payload["tickets"] = kept
+        return True, ""
+
     def _infer_payload_sport(self, payload: Dict[str, Any]) -> str:
         provider = str(payload.get("provider", "") or "").strip().lower()
         source = str(payload.get("source", "") or "").strip().lower()
@@ -1003,6 +1037,10 @@ class AutoEntryService:
             accepted, reason_strategy = self._accepts_payload_strategy(payload_obj)
             if not accepted:
                 self._log_target(target, f"見送り: {reason_strategy} ({race_tag})")
+                continue
+            accepted_bt, reason_bt = self._accepts_payload_bet_types(payload_obj)
+            if not accepted_bt:
+                self._log_target(target, f"見送り: {reason_bt} ({race_tag})")
                 continue
             envelope = {
                 "payload": payload_obj,

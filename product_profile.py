@@ -1,11 +1,148 @@
 from __future__ import annotations
 
+import os
+import sys
+from pathlib import Path
 from typing import Any
 
-PRODUCT_NAME = "AQUA EDGE AI"
+# 取り扱う券種（GOLD/SILVER/BRONZE で選べる対象）。2連単は本商品ラインでは扱わない。
+BET_TYPES: tuple[str, ...] = ("2連複", "3連複", "3連単")
+
+# ---------------------------------------------------------------------------
+# エディション定義
+#   - GOLD/SILVER/BRONZE は「同時に選べる券種数の上限」で差別化する。
+#   - DEMO(KYOUTEI) は自分用。認証なし・全券種選択可。
+#   - テーマは現行の水色(アクア)を基調に、グレード色をアクセントとして重ねる。
+# ---------------------------------------------------------------------------
+EDITIONS: dict[str, dict[str, Any]] = {
+    "GOLD": {
+        "name": "AQUA EDGE AI GOLD",
+        "exe_basename": "AQUA EDGE AI_GOLD",
+        "log_basename": "aqua_edge_ai_gold",
+        "max_bet_types": 3,
+        "require_auth": True,
+        # (light, dark) のアクセント。アクア基調にゴールドを重ねる。
+        "tier_accent": ("#C8A22B", "#F4D469"),
+        "tier_label": "GOLD",
+    },
+    "SILVER": {
+        "name": "AQUA EDGE AI SILVER",
+        "exe_basename": "AQUA EDGE AI_SILVER",
+        "log_basename": "aqua_edge_ai_silver",
+        "max_bet_types": 2,
+        "require_auth": True,
+        "tier_accent": ("#7C879A", "#C5D6E2"),
+        "tier_label": "SILVER",
+    },
+    "BRONZE": {
+        "name": "AQUA EDGE AI BRONZE",
+        "exe_basename": "AQUA EDGE AI_BRONZE",
+        "log_basename": "aqua_edge_ai_bronze",
+        "max_bet_types": 1,
+        "require_auth": True,
+        "tier_accent": ("#A9692E", "#DFA468"),
+        "tier_label": "BRONZE",
+    },
+    "DEMO": {
+        "name": "KYOUTEI",
+        "exe_basename": "KYOUTEI",
+        "log_basename": "kyoutei",
+        "max_bet_types": 3,
+        "require_auth": False,
+        "tier_accent": ("#008BC7", "#4FD8FF"),
+        "tier_label": "DEMO",
+    },
+}
+DEFAULT_EDITION = "GOLD"
+
+
+def detect_edition() -> str:
+    """実行中エディションを判定する。
+
+    優先順位: 環境変数 APP_EDITION → 凍結EXEのファイル名 → 既定(GOLD)。
+    EXE名は build 時に `AQUA EDGE AI_GOLD_v0.3.27.exe` のように付くため、
+    名前に含まれるグレード語で判定する（KYOUTEI はデモ=認証なし）。
+    """
+    env = str(os.environ.get("APP_EDITION", "") or "").strip().upper()
+    if env in EDITIONS:
+        return env
+    try:
+        if getattr(sys, "frozen", False):
+            stem = Path(sys.executable).stem.upper()
+            if "KYOUTEI" in stem:
+                return "DEMO"
+            for ed in ("GOLD", "SILVER", "BRONZE"):
+                if ed in stem:
+                    return ed
+    except Exception:
+        pass
+    return DEFAULT_EDITION
+
+
+def edition_profile(edition: str | None = None) -> dict[str, Any]:
+    ed = str(edition or detect_edition() or DEFAULT_EDITION).upper()
+    return dict(EDITIONS.get(ed, EDITIONS[DEFAULT_EDITION]))
+
+
+_PROFILE = edition_profile()
+
+PRODUCT_NAME = _PROFILE["name"]
 PRODUCT_TAGLINE = "Discord連携で競艇エントリーを整える商品版ダッシュボード"
-PRODUCT_EXE_BASENAME = "AQUA EDGE AI"
-PRODUCT_LOG_BASENAME = "aqua_edge_ai"
+PRODUCT_EXE_BASENAME = _PROFILE["exe_basename"]
+PRODUCT_LOG_BASENAME = _PROFILE["log_basename"]
+
+
+def max_bet_types(edition: str | None = None) -> int:
+    return int(edition_profile(edition).get("max_bet_types", len(BET_TYPES)))
+
+
+def edition_requires_auth(edition: str | None = None) -> bool:
+    return bool(edition_profile(edition).get("require_auth", True))
+
+
+def tier_accent(edition: str | None = None) -> tuple[str, str]:
+    accent = edition_profile(edition).get("tier_accent", APP_PALETTE["accent"])
+    return (str(accent[0]), str(accent[1]))
+
+
+def tier_label(edition: str | None = None) -> str:
+    return str(edition_profile(edition).get("tier_label", ""))
+
+
+def normalize_bet_type(value: Any) -> str:
+    """券種表記ゆれを正規化（全角・別名 → 2連複/3連複/3連単）。対象外は空文字。"""
+    text = str(value or "").strip()
+    if not text:
+        return ""
+    table = {
+        "2連複": "2連複", "２連複": "2連複", "二連複": "2連複", "拡連複": "2連複",
+        "3連複": "3連複", "３連複": "3連複", "三連複": "3連複",
+        "3連単": "3連単", "３連単": "3連単", "三連単": "3連単",
+    }
+    return table.get(text, "")
+
+
+def clamp_enabled_bet_types(values: Any, edition: str | None = None) -> list[str]:
+    """選択券種を正規化し、エディションの上限件数で切り詰める。"""
+    cap = max_bet_types(edition)
+    seen: list[str] = []
+    if isinstance(values, (list, tuple)):
+        for v in values:
+            nb = normalize_bet_type(v)
+            if nb and nb in BET_TYPES and nb not in seen:
+                seen.append(nb)
+    # 選択順（＝ユーザーの優先順）を保ったまま上限で切る
+    return seen[:cap]
+
+
+# 既定選択の優先順（cap の範囲で先頭から採用）。
+# 3連複=実績ある主力、2連複=高的中、3連単=高ROIの順。
+DEFAULT_BET_TYPE_PRIORITY: tuple[str, ...] = ("3連複", "2連複", "3連単")
+
+
+def default_enabled_bet_types(edition: str | None = None) -> list[str]:
+    cap = max_bet_types(edition)
+    return list(DEFAULT_BET_TYPE_PRIORITY[:cap])
 
 TOOL_SLOT_ORDER: tuple[str, ...] = ("morning", "daytime", "midnight")
 TOOL_SLOT_LABELS = {

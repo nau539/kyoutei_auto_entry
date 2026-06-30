@@ -2,8 +2,14 @@ import unittest
 
 from product_profile import (
     app_palette,
+    clamp_enabled_bet_types,
+    default_enabled_bet_types,
+    edition_profile,
+    edition_requires_auth,
     infer_tool_slot_from_candidate_payload,
     infer_tool_slot_from_entry_payload,
+    max_bet_types,
+    normalize_bet_type,
     normalize_tool_slot,
     runtime_log_basename,
     runtime_product_name,
@@ -13,9 +19,30 @@ from product_profile import (
 
 
 class ProductProfileTests(unittest.TestCase):
-    def test_runtime_names_are_single_product_names(self):
-        self.assertEqual(runtime_product_name(), "AQUA EDGE AI")
-        self.assertEqual(runtime_log_basename(), "aqua_edge_ai")
+    def test_default_edition_is_gold_branded_aqua_product(self):
+        # 既定(未指定/未凍結)は GOLD エディション。製品ラインは AQUA EDGE AI。
+        self.assertEqual(runtime_product_name(), "AQUA EDGE AI GOLD")
+        self.assertEqual(runtime_log_basename(), "aqua_edge_ai_gold")
+
+    def test_edition_caps_and_auth(self):
+        self.assertEqual(max_bet_types("GOLD"), 3)
+        self.assertEqual(max_bet_types("SILVER"), 2)
+        self.assertEqual(max_bet_types("BRONZE"), 1)
+        self.assertEqual(max_bet_types("DEMO"), 3)
+        self.assertTrue(edition_requires_auth("GOLD"))
+        self.assertFalse(edition_requires_auth("DEMO"))
+        self.assertEqual(edition_profile("DEMO")["exe_basename"], "KYOUTEI")
+        self.assertEqual(edition_profile("GOLD")["exe_basename"], "AQUA EDGE AI_GOLD")
+
+    def test_bet_type_selection_is_clamped_to_edition_cap(self):
+        self.assertEqual(normalize_bet_type("２連複"), "2連複")
+        self.assertEqual(normalize_bet_type("三連単"), "3連単")
+        self.assertEqual(normalize_bet_type("馬連"), "")
+        # BRONZE は最大1種。選択順を優先して切り詰める。
+        self.assertEqual(clamp_enabled_bet_types(["3連単", "3連複", "2連複"], "BRONZE"), ["3連単"])
+        self.assertEqual(clamp_enabled_bet_types(["3連複", "2連複", "3連単"], "SILVER"), ["3連複", "2連複"])
+        self.assertEqual(default_enabled_bet_types("GOLD"), ["3連複", "2連複", "3連単"])
+        self.assertEqual(default_enabled_bet_types("BRONZE"), ["3連複"])
 
     def test_tool_slot_aliases_are_normalized_for_message_routing(self):
         self.assertEqual(normalize_tool_slot("モーニング"), "morning")

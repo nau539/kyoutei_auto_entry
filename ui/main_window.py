@@ -12,7 +12,10 @@ import customtkinter as ctk
 from config import AppSettings, CONFIG_FILE, load_settings, save_settings
 from product_profile import (
     app_palette,
+    edition_requires_auth,
     runtime_product_name,
+    tier_accent,
+    tier_label,
 )
 from service import AutoEntryService
 from ui.components.status_bar import StatusBar
@@ -93,7 +96,9 @@ class AutoEntryApp(ctk.CTk):
         self._stat_skipped = 0
         self._discord_connected = False
         self._auth_in_progress = False
-        self._is_authenticated = False
+        # デモ版(KYOUTEI)は認証不要。最初から認証済み扱いにする。
+        self._auth_required = bool(edition_requires_auth())
+        self._is_authenticated = not self._auth_required
         self._service_op_in_progress = False
 
         self._build_layout()
@@ -158,7 +163,18 @@ class AutoEntryApp(ctk.CTk):
         self._sidebar_subtitle = ctk.CTkLabel(
             self._sidebar, text="連携 → BOAT RACE", font=FONT_SMALL, text_color=COLOR_TEXT_MUTED
         )
-        self._sidebar_subtitle.pack(padx=16, pady=(0, 20))
+        self._sidebar_subtitle.pack(padx=16, pady=(0, 6))
+
+        # グレード（GOLD/SILVER/BRONZE/DEMO）バッジ。アクア基調にグレード色を重ねる。
+        self._tier_badge = ctk.CTkLabel(
+            self._sidebar,
+            text=f"  {tier_label()}  ",
+            font=FONT_SMALL,
+            corner_radius=8,
+            fg_color=tier_accent(),
+            text_color=("#1A1A1A", "#1A1A1A"),
+        )
+        self._tier_badge.pack(padx=16, pady=(0, 18))
 
         auth_wrap = ctk.CTkFrame(self._sidebar, fg_color="transparent")
         auth_wrap.pack(fill="x", padx=12, pady=(0, 12))
@@ -343,6 +359,15 @@ class AutoEntryApp(ctk.CTk):
             self._set_buttons_enabled(child, enabled, exclude)
 
     def _apply_auth_lock_state(self) -> None:
+        if not self._auth_required:
+            # デモ版: 認証ロックなし。認証UIは無効化して「デモ版」表示にする。
+            self._is_authenticated = True
+            self._set_buttons_enabled(self, True, {self._auth_button})
+            self._auth_user_entry.configure(state="disabled")
+            self._auth_button.configure(state="disabled")
+            self._auth_status_label.configure(text="デモ版（認証不要）", text_color=COLOR_TEXT_MUTED)
+            self._dashboard_view.set_running(bool(self.service and self.service.running))
+            return
         enabled = bool(self._is_authenticated)
         exclude = {self._auth_button}
         self._set_buttons_enabled(self, enabled, exclude)
@@ -393,6 +418,8 @@ class AutoEntryApp(ctk.CTk):
         return True
 
     def _try_auto_auth_on_startup(self) -> None:
+        if not self._auth_required:
+            return
         if self._is_authenticated or self._auth_in_progress:
             return
         auth_settings = getattr(self.settings, "auth", None)

@@ -7,6 +7,10 @@ from pathlib import Path
 from typing import Any, Dict
 
 from strategy_modes import DEFAULT_STRATEGY_CODE
+from product_profile import (
+    clamp_enabled_bet_types as _clamp_enabled_bet_types,
+    default_enabled_bet_types as _default_enabled_bet_types,
+)
 
 CONFIG_FILE = "kyoutei_auto_entry_config.json"
 SELECTORS_FILE = "ipat_selectors.json"
@@ -241,6 +245,9 @@ class EntrySettings:
     central_schedule_open_time: str = DEFAULT_CENTRAL_SCHEDULE_OPEN_TIME
     central_schedule_close_time: str = DEFAULT_CENTRAL_SCHEDULE_CLOSE_TIME
     dispatch_mode: str = DEFAULT_STRATEGY_CODE
+    # GOLD/SILVER/BRONZE で選択した券種（2連複/3連複/3連単）。
+    # この券種の通知だけをキャッチ・エントリーする。エディション上限で切り詰める。
+    enabled_bet_types: list = field(default_factory=_default_enabled_bet_types)
 
 
 @dataclass
@@ -356,7 +363,15 @@ def _coerce_entry(raw: Dict[str, Any]) -> EntrySettings:
         ),
         # Hidden compatibility field. GUI and service no longer switch behavior by strategy.
         dispatch_mode=DEFAULT_STRATEGY_CODE,
+        enabled_bet_types=_coerce_enabled_bet_types(raw.get("enabled_bet_types")),
     )
+
+
+def _coerce_enabled_bet_types(raw: Any) -> list:
+    # 未設定(None=初回)はエディション既定。明示的な空リストはユーザーの「選択なし」を尊重。
+    if raw is None:
+        return _default_enabled_bet_types()
+    return _clamp_enabled_bet_types(raw)
 
 
 def _coerce_auth(raw: Dict[str, Any]) -> AuthSettings:
