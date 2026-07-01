@@ -132,6 +132,8 @@ def normalize_payload(obj: Dict[str, Any]) -> Dict[str, Any] | None:
         "message_type": "entry_tickets",
         "provider": str(obj.get("provider", "") or ""),
         "source": str(obj.get("source", "") or ""),
+        # clearismライン用: 通知の日区分（bunsekiが明示。無ければ空）。
+        "daypart": str(obj.get("daypart", "") or race.get("daypart", "") or ""),
         "race": {
             "date": date8,
             "venue_name": venue_name,

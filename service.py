@@ -26,8 +26,12 @@ from ipat_playwright import IpatEntryError, IpatPlaywrightExecutor, ThreadBoundI
 from payload_parser import extract_payloads_from_text
 from product_profile import (
     clamp_enabled_bet_types,
+    clamp_enabled_dayparts,
     infer_tool_slot_from_payload,
+    line_cap_axis,
+    active_line_channel_id,
     normalize_bet_type,
+    normalize_daypart_label,
     tool_slot_hour,
     tool_slot_label,
 )
@@ -284,7 +288,13 @@ class AutoEntryService:
         self._next_central_schedule_retry_monotonic = 0.0
         self._no_payload_debug_count = 0
         self._legacy_allowed_channel_ids = _normalize_id_set(getattr(secrets_local, "DISCORD_ALLOWED_CHANNEL_IDS", []))
-        self._central_channel_ids = _normalize_id_set(getattr(secrets_local, "DISCORD_CENTRAL_CHANNEL_IDS", []))
+        # 製品ライン（aqua=ch1521 / clearism=ch1490）の配信チャンネルを最優先で採用する。
+        # これにより同じ secrets でもEXEのラインごとに読み取りチャンネルが分かれる。
+        _line_channel = str(active_line_channel_id() or "").strip()
+        if _line_channel:
+            self._central_channel_ids = _normalize_id_set([_line_channel])
+        else:
+            self._central_channel_ids = _normalize_id_set(getattr(secrets_local, "DISCORD_CENTRAL_CHANNEL_IDS", []))
         self._local_channel_ids = _normalize_id_set(getattr(secrets_local, "DISCORD_LOCAL_CHANNEL_IDS", []))
         self._central_candidate_pause_active = False
         self._central_candidate_pause_date = ""
@@ -566,6 +576,42 @@ class AutoEntryService:
             return False, f"選択券種外(有効={'/'.join(sorted(enabled)) or 'なし'})"
         payload["tickets"] = kept
         return True, ""
+
+    def _enabled_dayparts(self) -> list[str]:
+        raw = getattr(self.settings.entry, "enabled_dayparts", None)
+        return clamp_enabled_dayparts(raw if raw is not None else [])
+
+    def _payload_daypart(self, payload: Dict[str, Any]) -> str:
+        """通知の日区分（モーニング/日中/ナイター）。payload明示 → tool_slot推定の順。"""
+        direct = normalize_daypart_label(payload.get("daypart"))
+        if direct:
+            return direct
+        race = payload.get("race") if isinstance(payload.get("race"), dict) else {}
+        direct = normalize_daypart_label(race.get("daypart"))
+        if direct:
+            return direct
+        slot = str(infer_tool_slot_from_payload(payload) or "")
+        # tool_slot は midnight を使うが、clearism ラインの第3枠はナイター。
+        return {"morning": "モーニング", "daytime": "日中", "midnight": "ナイター", "night": "ナイター"}.get(slot, "")
+
+    def _accepts_payload_dayparts(self, payload: Dict[str, Any]) -> tuple[bool, str]:
+        """clearismライン: 選択した日区分の通知だけ通す。"""
+        enabled = set(self._enabled_dayparts())
+        if not enabled:
+            return False, "選択日区分が0件です"
+        dp = self._payload_daypart(payload)
+        if not dp:
+            # 日区分不明の通知は安全側で通す（従来挙動）。
+            return True, ""
+        if dp not in enabled:
+            return False, f"選択日区分外({dp} / 有効={'/'.join(enabled)})"
+        return True, ""
+
+    def _accepts_payload_selection(self, payload: Dict[str, Any]) -> tuple[bool, str]:
+        """製品ラインの軸に応じてフィルタする（aqua=券種 / clearism=日区分）。"""
+        if line_cap_axis() == "daypart":
+            return self._accepts_payload_dayparts(payload)
+        return self._accepts_payload_bet_types(payload)
 
     def _infer_payload_sport(self, payload: Dict[str, Any]) -> str:
         provider = str(payload.get("provider", "") or "").strip().lower()
@@ -1038,7 +1084,7 @@ class AutoEntryService:
             if not accepted:
                 self._log_target(target, f"見送り: {reason_strategy} ({race_tag})")
                 continue
-            accepted_bt, reason_bt = self._accepts_payload_bet_types(payload_obj)
+            accepted_bt, reason_bt = self._accepts_payload_selection(payload_obj)
             if not accepted_bt:
                 self._log_target(target, f"見送り: {reason_bt} ({race_tag})")
                 continue

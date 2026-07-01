@@ -7,11 +7,15 @@ import customtkinter as ctk
 from config import DEFAULT_CENTRAL_SCHEDULE_CLOSE_TIME, DEFAULT_CENTRAL_SCHEDULE_OPEN_TIME, AppSettings
 from product_profile import (
     BET_TYPES,
+    DAYPARTS,
     PRODUCT_NAME,
     app_palette,
     clamp_enabled_bet_types,
+    clamp_enabled_dayparts,
     default_enabled_bet_types,
-    max_bet_types,
+    default_enabled_dayparts,
+    line_cap_axis,
+    max_selections,
     tier_label,
 )
 from ui.components.card_frame import CardFrame
@@ -185,15 +189,19 @@ class DashboardView(ctk.CTkFrame):
         )
         self._rule_note.pack(anchor="w", pady=(6, 0))
 
-        # 通知券種の選択（グレードで上限件数が決まる）
-        cap = max_bet_types()
-        bet_card = CardFrame(scroll, title=f"通知券種（{tier_label()}：最大{cap}種）")
+        # 通知の選択（グレードで上限件数が決まる）。
+        # aquaライン=券種(2連複/3連複/3連単)、clearismライン=日区分(モーニング/日中/ナイター)。
+        self._sel_axis = line_cap_axis()
+        self._sel_items = list(DAYPARTS) if self._sel_axis == "daypart" else list(BET_TYPES)
+        axis_word = "日区分" if self._sel_axis == "daypart" else "券種"
+        cap = max_selections()
+        bet_card = CardFrame(scroll, title=f"通知{axis_word}（{tier_label()}：最大{cap}）")
         bet_card.pack(fill="x", pady=(0, 12))
         self._bet_type_vars: dict[str, ctk.BooleanVar] = {}
         self._bet_type_boxes: dict[str, ctk.CTkCheckBox] = {}
         row = ctk.CTkFrame(bet_card.body, fg_color="transparent")
         row.pack(fill="x")
-        for bt in BET_TYPES:
+        for bt in self._sel_items:
             var = ctk.BooleanVar(value=False)
             box = ctk.CTkCheckBox(
                 row, text=bt, variable=var, font=FONT_BODY,
@@ -204,7 +212,7 @@ class DashboardView(ctk.CTkFrame):
             self._bet_type_boxes[bt] = box
         self._bet_type_note = ctk.CTkLabel(
             bet_card.body,
-            text=f"選択した券種の通知だけを取り込みます（最大{cap}種）。",
+            text=f"選択した{axis_word}の通知だけを取り込みます（最大{cap}）。",
             font=FONT_SMALL,
             text_color=COLOR_TEXT_MUTED,
             anchor="w",
@@ -297,8 +305,12 @@ class DashboardView(ctk.CTkFrame):
         self._vars["target_payout_yen"].set(str(int(getattr(settings.entry, "target_payout_yen", 10000) or 10000)))
         self._vars["entry_abort_total_yen"].set(str(int(getattr(settings.entry, "entry_abort_total_yen", 10000) or 0)))
 
-        enabled = getattr(settings.entry, "enabled_bet_types", None)
-        enabled = clamp_enabled_bet_types(enabled) if enabled is not None else default_enabled_bet_types()
+        if getattr(self, "_sel_axis", "bet_type") == "daypart":
+            enabled = getattr(settings.entry, "enabled_dayparts", None)
+            enabled = clamp_enabled_dayparts(enabled) if enabled is not None else default_enabled_dayparts()
+        else:
+            enabled = getattr(settings.entry, "enabled_bet_types", None)
+            enabled = clamp_enabled_bet_types(enabled) if enabled is not None else default_enabled_bet_types()
         for bt, var in getattr(self, "_bet_type_vars", {}).items():
             var.set(bt in enabled)
         self._apply_bet_type_cap_state()
@@ -341,33 +353,38 @@ class DashboardView(ctk.CTkFrame):
         settings.entry.central_schedule_enabled = True
         settings.entry.central_schedule_open_time = DEFAULT_CENTRAL_SCHEDULE_OPEN_TIME
         settings.entry.central_schedule_close_time = DEFAULT_CENTRAL_SCHEDULE_CLOSE_TIME
-        settings.entry.enabled_bet_types = self._selected_bet_types()
+        if getattr(self, "_sel_axis", "bet_type") == "daypart":
+            settings.entry.enabled_dayparts = self._selected_bet_types()
+        else:
+            settings.entry.enabled_bet_types = self._selected_bet_types()
 
-    # --- 通知券種（グレード上限） -------------------------------------
+    # --- 通知の選択（グレード上限。券種 or 日区分） --------------------
     def _selected_bet_types(self) -> list:
-        chosen = [bt for bt in BET_TYPES if self._bet_type_vars.get(bt) and self._bet_type_vars[bt].get()]
+        chosen = [bt for bt in self._sel_items if self._bet_type_vars.get(bt) and self._bet_type_vars[bt].get()]
+        if self._sel_axis == "daypart":
+            return clamp_enabled_dayparts(chosen)
         return clamp_enabled_bet_types(chosen)
 
     def _on_bet_type_toggle(self, bet_type: str) -> None:
-        cap = max_bet_types()
-        chosen = [bt for bt in BET_TYPES if self._bet_type_vars[bt].get()]
+        cap = max_selections()
+        chosen = [bt for bt in self._sel_items if self._bet_type_vars[bt].get()]
         if len(chosen) > cap:
             # 上限超過: 今押したものを取り消す
             self._bet_type_vars[bet_type].set(False)
         self._apply_bet_type_cap_state()
 
     def _apply_bet_type_cap_state(self) -> None:
-        cap = max_bet_types()
-        chosen = [bt for bt in BET_TYPES if self._bet_type_vars[bt].get()]
+        cap = max_selections()
+        chosen = [bt for bt in self._sel_items if self._bet_type_vars[bt].get()]
         at_cap = len(chosen) >= cap
         for bt, box in self._bet_type_boxes.items():
-            # 上限に達したら未選択の券種は押せないようにする
+            # 上限に達したら未選択のものは押せないようにする
             if at_cap and not self._bet_type_vars[bt].get():
                 box.configure(state="disabled")
             else:
                 box.configure(state="normal")
         self._bet_type_note.configure(
-            text=f"選択中 {len(chosen)}/{cap} 種：{'・'.join(chosen) or 'なし'}"
+            text=f"選択中 {len(chosen)}/{cap}：{'・'.join(chosen) or 'なし'}"
         )
 
     def sync_mode(self, _is_dry_run: bool) -> None:

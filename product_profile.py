@@ -61,6 +61,81 @@ EDITIONS: dict[str, dict[str, Any]] = {
 }
 DEFAULT_EDITION = "GOLD"
 
+# ---------------------------------------------------------------------------
+# 製品ライン（配信チャンネル・グレードの意味・配信戦略が異なる）
+#   - aqua      : 自分/他社向け。GOLD/SILVER/BRONZE は「選べる券種数」を制限。ch1521。
+#   - clearism  : クリアイズム様向け。前の3連複(stable3f)。GOLD/SILVER/BRONZE は
+#                 「選べる日区分(モーニング/日中/ナイター)数」を制限。ch1490。
+# ---------------------------------------------------------------------------
+PRODUCT_LINES: dict[str, dict[str, Any]] = {
+    "aqua": {
+        "brand": "AQUA EDGE AI",
+        "log_brand": "aqua_edge_ai",
+        "cap_axis": "bet_type",
+        "channel_id": "1521839594860187649",
+        "dispatch_strategy": "aqua3",
+        "webhook_config": "configs/local/discord_webhook_aqua.txt",
+    },
+    "clearism": {
+        "brand": "AQUA EDGE AI CLEARISM",
+        "log_brand": "aqua_edge_ai_clearism",
+        "cap_axis": "daypart",
+        "channel_id": "1490297331839664290",
+        "dispatch_strategy": "stable3f",
+        "webhook_config": "configs/local/discord_webhook_clearism.txt",
+    },
+}
+DEFAULT_LINE = "aqua"
+
+# クリアイズム様ラインで選べる日区分
+DAYPARTS: tuple[str, ...] = ("モーニング", "日中", "ナイター")
+DAYPART_CODES = {"モーニング": "morning", "日中": "daytime", "ナイター": "night"}
+DEFAULT_DAYPART_PRIORITY: tuple[str, ...] = ("ナイター", "日中", "モーニング")
+
+
+def detect_line() -> str:
+    """実行中の製品ラインを判定する（環境変数 APP_LINE → EXE名の CLEARISM 有無）。"""
+    env = str(os.environ.get("APP_LINE", "") or "").strip().lower()
+    if env in PRODUCT_LINES:
+        return env
+    try:
+        if getattr(sys, "frozen", False):
+            stem = Path(sys.executable).stem.upper()
+            if "CLEARISM" in stem:
+                return "clearism"
+    except Exception:
+        pass
+    return DEFAULT_LINE
+
+
+def line_profile(line: str | None = None) -> dict[str, Any]:
+    ln = str(line or detect_line() or DEFAULT_LINE).lower()
+    return dict(PRODUCT_LINES.get(ln, PRODUCT_LINES[DEFAULT_LINE]))
+
+
+def line_channel_id(line: str | None = None) -> str:
+    return str(line_profile(line).get("channel_id", ""))
+
+
+def active_line_channel_id() -> str:
+    """実配布(frozen)または APP_LINE 明示時のみ、ラインの配信チャンネルを返す。
+
+    dev/テストでは空を返し、secrets_local の設定を尊重する。
+    """
+    explicit = bool(str(os.environ.get("APP_LINE", "") or "").strip())
+    frozen = bool(getattr(sys, "frozen", False))
+    if explicit or frozen:
+        return line_channel_id()
+    return ""
+
+
+def line_cap_axis(line: str | None = None) -> str:
+    return str(line_profile(line).get("cap_axis", "bet_type"))
+
+
+def line_dispatch_strategy(line: str | None = None) -> str:
+    return str(line_profile(line).get("dispatch_strategy", "aqua3"))
+
 
 def detect_edition() -> str:
     """実行中エディションを判定する。
@@ -90,16 +165,40 @@ def edition_profile(edition: str | None = None) -> dict[str, Any]:
     return dict(EDITIONS.get(ed, EDITIONS[DEFAULT_EDITION]))
 
 
-_PROFILE = edition_profile()
+def edition_name(edition: str | None = None, line: str | None = None) -> str:
+    ed = str(edition or detect_edition()).upper()
+    if ed == "DEMO":
+        return "KYOUTEI"
+    return f"{line_profile(line)['brand']} {ed}"
 
-PRODUCT_NAME = _PROFILE["name"]
+
+def edition_exe_basename(edition: str | None = None, line: str | None = None) -> str:
+    ed = str(edition or detect_edition()).upper()
+    if ed == "DEMO":
+        return "KYOUTEI"
+    return f"{line_profile(line)['brand']}_{ed}"
+
+
+def edition_log_basename(edition: str | None = None, line: str | None = None) -> str:
+    ed = str(edition or detect_edition()).upper()
+    if ed == "DEMO":
+        return "kyoutei"
+    return f"{line_profile(line)['log_brand']}_{ed.lower()}"
+
+
+PRODUCT_NAME = edition_name()
 PRODUCT_TAGLINE = "Discord連携で競艇エントリーを整える商品版ダッシュボード"
-PRODUCT_EXE_BASENAME = _PROFILE["exe_basename"]
-PRODUCT_LOG_BASENAME = _PROFILE["log_basename"]
+PRODUCT_EXE_BASENAME = edition_exe_basename()
+PRODUCT_LOG_BASENAME = edition_log_basename()
 
 
 def max_bet_types(edition: str | None = None) -> int:
     return int(edition_profile(edition).get("max_bet_types", len(BET_TYPES)))
+
+
+def max_selections(edition: str | None = None) -> int:
+    """グレードの選択上限件数（GOLD=3/SILVER=2/BRONZE=1/DEMO=3）。券種にも日区分にも使う。"""
+    return max_bet_types(edition)
 
 
 def edition_requires_auth(edition: str | None = None) -> bool:
@@ -158,6 +257,41 @@ DEFAULT_BET_TYPE_PRIORITY: tuple[str, ...] = ("3連複", "2連複", "3連単")
 def default_enabled_bet_types(edition: str | None = None) -> list[str]:
     cap = max_bet_types(edition)
     return list(DEFAULT_BET_TYPE_PRIORITY[:cap])
+
+
+# --- クリアイズム様ライン: 日区分の選択（モーニング/日中/ナイター） ---------
+def normalize_daypart_label(value: Any) -> str:
+    """日区分の表記ゆれを DAYPARTS 表記（モーニング/日中/ナイター）へ。対象外は空。"""
+    text = str(value or "").strip()
+    if not text:
+        return ""
+    table = {
+        "モーニング": "モーニング", "morning": "モーニング", "朝": "モーニング",
+        "日中": "日中", "daytime": "日中", "day": "日中", "デイ": "日中",
+        "ナイター": "ナイター", "night": "ナイター", "ナイト": "ナイター", "nighter": "ナイター",
+    }
+    return table.get(text, table.get(text.lower(), ""))
+
+
+def daypart_code(label: Any) -> str:
+    """DAYPARTS 表記 → bunseki の daypart コード（morning/daytime/night）。"""
+    return DAYPART_CODES.get(normalize_daypart_label(label), "")
+
+
+def clamp_enabled_dayparts(values: Any, edition: str | None = None) -> list[str]:
+    cap = max_selections(edition)
+    seen: list[str] = []
+    if isinstance(values, (list, tuple)):
+        for v in values:
+            nb = normalize_daypart_label(v)
+            if nb and nb in DAYPARTS and nb not in seen:
+                seen.append(nb)
+    return seen[:cap]
+
+
+def default_enabled_dayparts(edition: str | None = None) -> list[str]:
+    cap = max_selections(edition)
+    return list(DEFAULT_DAYPART_PRIORITY[:cap])
 
 TOOL_SLOT_ORDER: tuple[str, ...] = ("morning", "daytime", "midnight")
 TOOL_SLOT_LABELS = {
