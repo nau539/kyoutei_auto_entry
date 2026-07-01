@@ -70,7 +70,7 @@ python3 -m unittest tests.test_payload_parser tests.test_config tests.test_produ
 
 ## ビルド
 
-クリアイズム様向けは、AQUA EDGE AI_GOLD / AQUA EDGE AI_SILVER / AQUA EDGE AI_BRONZE の3本を作る。通常向けは kyoutei_auto_trade.exe を作る。
+クリアイズム様向けは、AQUA EDGE AI_GOLD / AQUA EDGE AI_SILVER / AQUA EDGE AI_BRONZE の3本を作る。通常向けはGOLD相当の kyoutei_auto_trade.exe を作る。
 
 まとめて作る場合は、bash build_all_lines.sh を実行する。
 

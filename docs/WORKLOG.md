@@ -758,6 +758,19 @@
 - Open items:
   - 実機起動後の認証画面で、クリアイズム様向けがauth_clear、通常向けがauth_masterを参照することを画面操作で最終確認する。
 
+## 2026-07-01
+- Task: kyoutei_auto_tradeをGOLD相当に修正
+- Summary: 通常向けの kyoutei_auto_trade.exe がBRONZE固定になっていたため、aquaライン、auth_masterのままエディションだけGOLD固定へ変更した。これにより3券種すべてを使えるGOLD相当の内容になり、BRONZE表示は出ない。
+- Changed files: build_all_lines.sh, README.md, docs/PROJECT_CONTEXT.md, docs/CHANGELOG_CUSTOMER.md, docs/WORKLOG.md, docs/LEARNINGS.md
+- Verification:
+  - python build_release.py --spec kyoutei_auto_entry.spec --line aqua --edition GOLD --auth-module auth_master --app-name kyoutei_auto_trade --no-version-suffix --dry-run
+  - python -m unittest discover -s tests -p test_product_profile.py -q
+  - python build_release.py --spec kyoutei_auto_entry.spec --line aqua --edition GOLD --auth-module auth_master --app-name kyoutei_auto_trade --no-version-suffix --clean
+  - build/runtime_hooks/kyoutei_auto_trade_runtime_profile.py が APP_EDITION=GOLD、APP_AUTH_MODULE=auth_master であることを確認
+  - dist/kyoutei_auto_trade.exe が更新されていることを確認
+- Open items:
+  - 実機起動後の画面表示で、BRONZEバッジが出ずGOLD相当の最大3券種になっていることを一度確認する。
+
 ## 2026-06-26
 - Task: AQUA EDGE AI からプラン、利用枠、固定版分岐を削除
 - Summary: BRONZE、SILVER、GOLD のプラン表示、利用枠選択、固定プラン版や体験版のビルド分岐を削除した。Discord通知は利用枠で見送らず、AQUA EDGE AI としてそのまま受信する形に整理した。未使用になった旧ダッシュボードと確認ダイアログも削除した。

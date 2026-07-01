@@ -90,12 +90,12 @@ secrets_local.py に少なくとも以下を設定します。
 - クリアイズム様向け GOLD: python build_release.py --spec kyoutei_auto_entry.spec --line clearism --edition GOLD --auth-module auth_clear --app-name "AQUA EDGE AI_GOLD" --clean
 - クリアイズム様向け SILVER: python build_release.py --spec kyoutei_auto_entry.spec --line clearism --edition SILVER --auth-module auth_clear --app-name "AQUA EDGE AI_SILVER" --clean
 - クリアイズム様向け BRONZE: python build_release.py --spec kyoutei_auto_entry.spec --line clearism --edition BRONZE --auth-module auth_clear --app-name "AQUA EDGE AI_BRONZE" --clean
-- 通常向け: python build_release.py --spec kyoutei_auto_entry.spec --line aqua --edition BRONZE --auth-module auth_master --app-name kyoutei_auto_trade --no-version-suffix --clean
+- 通常向け: python build_release.py --spec kyoutei_auto_entry.spec --line aqua --edition GOLD --auth-module auth_master --app-name kyoutei_auto_trade --no-version-suffix --clean
 
 4本まとめてビルドする場合は bash build_all_lines.sh を実行する。
 
 - クリアイズム様向けは、GOLD/SILVER/BRONZEごとに選べる日区分（モーニング/日中/ナイター）の上限が変わる。
-- 通常向けは、auth_masterを使う固定名の kyoutei_auto_trade.exe として作成する。
+- 通常向けは、auth_masterを使うGOLD相当の固定名 kyoutei_auto_trade.exe として作成する。
 - 開発時に手元で挙動を切り替えるには環境変数 APP_LINE、APP_EDITION、APP_AUTH_MODULE を指定する。
 
 ### 送信側（kyoutei_bunseki）
