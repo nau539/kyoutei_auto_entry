@@ -85,17 +85,18 @@ secrets_local.py に少なくとも以下を設定します。
 
 ## ビルド
 
-エディション別に4本作る。エディションはEXE名（GOLD/SILVER/BRONZE/KYOUTEI）から実行時に自動判定する。
+配布はクリアイズム様向け3本と、通常向け1本を作る。製品ライン、エディション、認証先はビルド時のruntime hookで固定するため、EXE名だけに依存しない。
 
-- GOLD（券種 最大3種・認証 auth_clear）: `python build_release.py --app-name "AQUA EDGE AI_GOLD" --clean`
-- SILVER（最大2種・auth_clear）: `python build_release.py --app-name "AQUA EDGE AI_SILVER" --clean`
-- BRONZE（最大1種・auth_clear）: `python build_release.py --app-name "AQUA EDGE AI_BRONZE" --clean`
-- KYOUTEI（自分用デモ・最大3種・認証 auth_master）: `python build_release.py --app-name "KYOUTEI" --clean`
+- クリアイズム様向け GOLD: python build_release.py --spec kyoutei_auto_entry.spec --line clearism --edition GOLD --auth-module auth_clear --app-name "AQUA EDGE AI_GOLD" --clean
+- クリアイズム様向け SILVER: python build_release.py --spec kyoutei_auto_entry.spec --line clearism --edition SILVER --auth-module auth_clear --app-name "AQUA EDGE AI_SILVER" --clean
+- クリアイズム様向け BRONZE: python build_release.py --spec kyoutei_auto_entry.spec --line clearism --edition BRONZE --auth-module auth_clear --app-name "AQUA EDGE AI_BRONZE" --clean
+- 通常向け: python build_release.py --spec kyoutei_auto_entry.spec --line aqua --edition BRONZE --auth-module auth_master --app-name kyoutei_auto_trade --no-version-suffix --clean
 
-4本まとめてビルドする場合は `bash build_all_editions.sh`。
+4本まとめてビルドする場合は bash build_all_lines.sh を実行する。
 
-- エディションごとに、同時に選べる券種（2連複/3連複/3連単）の上限が変わる。選んだ券種の通知だけをキャッチ・自動入力する。
-- 開発時に手元で挙動を切り替えるには環境変数 `APP_EDITION=GOLD|SILVER|BRONZE|DEMO` を指定する（EXE名判定より優先）。
+- クリアイズム様向けは、GOLD/SILVER/BRONZEごとに選べる日区分（モーニング/日中/ナイター）の上限が変わる。
+- 通常向けは、auth_masterを使う固定名の kyoutei_auto_trade.exe として作成する。
+- 開発時に手元で挙動を切り替えるには環境変数 APP_LINE、APP_EDITION、APP_AUTH_MODULE を指定する。
 
 ### 送信側（kyoutei_bunseki）
 - 通知は `aqua3` 戦略（ナイター・信頼度0.86・2連複/3連複/3連単を同時通知・100円固定）を使う。

@@ -50,9 +50,9 @@ try:
 
     from product_profile import edition_auth_module as _edition_auth_module
 
-    # エディションに応じて認証バックエンドを切り替える。
-    #   GOLD/SILVER/BRONZE -> auth_clear（顧客向けシート）
-    #   DEMO(KYOUTEI)      -> auth_master（自分用 master シート）
+    # ビルド時に固定した製品ラインに応じて認証バックエンドを切り替える。
+    #   clearism -> auth_clear
+    #   aqua/DEMO -> auth_master
     auth_module = importlib.import_module(_edition_auth_module())
 except Exception as _auth_import_exc:  # pragma: no cover
     auth_module = None

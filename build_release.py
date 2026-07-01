@@ -1,5 +1,6 @@
 #!/usr/bin/env python3
 import argparse
+import json
 import os
 from pathlib import Path
 import re
@@ -8,13 +9,16 @@ import subprocess
 import sys
 import time
 
-from product_profile import PRODUCT_EXE_BASENAME
+from product_profile import EDITIONS, PRODUCT_EXE_BASENAME, PRODUCT_LINES
 
 
 EXE_NAME_ENV = "APP_EXE_NAME"
+RUNTIME_HOOK_ENV = "APP_RUNTIME_HOOK"
 PROJECT_DIR = Path(__file__).resolve().parent
 VERSION_FILE = PROJECT_DIR / "VERSION.txt"
 DIST_DIR = PROJECT_DIR / "dist"
+BUILD_DIR = PROJECT_DIR / "build"
+RUNTIME_HOOK_DIR = BUILD_DIR / "runtime_hooks"
 CHANGELOG_FILE = PROJECT_DIR / "docs" / "CHANGELOG_CUSTOMER.md"
 PLAYWRIGHT_BUNDLE_DIR_PREFIXES = (
     "chromium-",
@@ -126,25 +130,124 @@ def ensure_playwright_chromium_ready() -> None:
 
 def infer_app_basename(spec_file: Path, app_name_arg: str) -> str:
     if app_name_arg and app_name_arg.strip():
-        return app_name_arg.strip()
+        name = app_name_arg.strip()
+        if name.lower().endswith(".exe"):
+            name = name[:-4]
+        return name
     return PRODUCT_EXE_BASENAME or spec_file.stem
 
 
-def build_exe_name(app_basename: str, version: str) -> str:
+def build_exe_name(app_basename: str, version: str, *, include_version: bool = True) -> str:
+    if not include_version:
+        return app_basename
     return f"{app_basename}_v{sanitize_version(version)}"
+
+
+def normalize_line_arg(line_arg: str) -> str:
+    line = str(line_arg or "").strip().lower()
+    if not line:
+        return ""
+    if line not in PRODUCT_LINES:
+        names = ", ".join(sorted(PRODUCT_LINES.keys()))
+        raise ValueError(f"--line は次のいずれかで指定してください: {names}")
+    return line
+
+
+def normalize_edition_arg(edition_arg: str) -> str:
+    edition = str(edition_arg or "").strip().upper()
+    if not edition:
+        return ""
+    if edition not in EDITIONS:
+        names = ", ".join(sorted(EDITIONS.keys()))
+        raise ValueError(f"--edition は次のいずれかで指定してください: {names}")
+    return edition
+
+
+def infer_line_from_app_basename(app_basename: str) -> str:
+    text = str(app_basename or "").upper()
+    if "CLEARISM" in text:
+        return "clearism"
+    return "aqua"
+
+
+def infer_edition_from_app_basename(app_basename: str) -> str:
+    text = str(app_basename or "").upper()
+    if "KYOUTEI" in text:
+        return "DEMO"
+    for edition in ("GOLD", "SILVER", "BRONZE"):
+        if edition in text:
+            return edition
+    return "GOLD"
+
+
+def select_auth_module(line: str, edition: str, auth_module_arg: str) -> str:
+    auth_module = str(auth_module_arg or "").strip()
+    if auth_module:
+        return auth_module
+    if edition == "DEMO":
+        return "auth_master"
+    if line == "clearism":
+        return "auth_clear"
+    return "auth_master"
+
+
+def sanitize_hook_name(value: str) -> str:
+    safe = re.sub(r"[^0-9A-Za-z._-]+", "_", value)
+    return safe.strip("._-") or "runtime_profile"
+
+
+def write_runtime_profile_hook(
+    *,
+    exe_name: str,
+    version: str,
+    line: str,
+    edition: str,
+    auth_module: str,
+    dry_run: bool,
+) -> Path:
+    hook_path = RUNTIME_HOOK_DIR / f"{sanitize_hook_name(exe_name)}_runtime_profile.py"
+    print(
+        "[build] runtime profile: "
+        f"line={line} edition={edition} auth={auth_module} version={version}"
+    )
+    if dry_run:
+        print(f"[build] runtime hook: {hook_path}")
+        return hook_path
+
+    RUNTIME_HOOK_DIR.mkdir(parents=True, exist_ok=True)
+    lines = [
+        "import os",
+        f"os.environ['APP_LINE'] = {json.dumps(line, ensure_ascii=True)}",
+        f"os.environ['APP_EDITION'] = {json.dumps(edition, ensure_ascii=True)}",
+        f"os.environ['APP_AUTH_MODULE'] = {json.dumps(auth_module, ensure_ascii=True)}",
+        f"os.environ['APP_VERSION'] = {json.dumps(version, ensure_ascii=True)}",
+        "",
+    ]
+    hook_path.write_text("\n".join(lines), encoding="utf-8")
+    return hook_path
 
 
 def run_pyinstaller(
     spec_file: Path,
     exe_name: str,
     *,
+    version: str,
+    line: str,
+    edition: str,
+    auth_module: str,
     clean: bool,
     dry_run: bool,
     bundle_browser: bool,
+    runtime_hook: Path,
 ) -> float:
     env = os.environ.copy()
     env[EXE_NAME_ENV] = exe_name
+    env["APP_VERSION"] = version
+    env["APP_LINE"] = line
+    env["APP_EDITION"] = edition
+    env["APP_AUTH_MODULE"] = auth_module
     env["BUNDLE_PLAYWRIGHT_BROWSER"] = "1" if bundle_browser else "0"
+    env[RUNTIME_HOOK_ENV] = str(runtime_hook)
 
     base_cmd = ["pyinstaller", "--noconfirm", spec_file.name]
     cmd = ["pyinstaller", "--noconfirm"]
@@ -155,6 +258,7 @@ def run_pyinstaller(
     print(f"[build] spec: {spec_file.name}")
     print(f"[build] exe名: {exe_name}")
     print(f"[build] playwright browser同梱: {'ON' if bundle_browser else 'OFF'}")
+    print(f"[build] runtime hook: {runtime_hook}")
     print(f"[build] command: {' '.join(cmd)}")
     if dry_run:
         return time.time()
@@ -274,18 +378,38 @@ def build_release(
     dry_run: bool,
     bundle_browser: bool,
     app_name_arg: str = "",
+    line_arg: str = "",
+    edition_arg: str = "",
+    auth_module_arg: str = "",
+    include_version_suffix: bool = True,
 ) -> Path:
     app_basename = infer_app_basename(spec_file, app_name_arg)
     version = read_version(version_file)
-    exe_name = build_exe_name(app_basename, version)
+    exe_name = build_exe_name(app_basename, version, include_version=include_version_suffix)
+    line = normalize_line_arg(line_arg) or infer_line_from_app_basename(app_basename)
+    edition = normalize_edition_arg(edition_arg) or infer_edition_from_app_basename(app_basename)
+    auth_module = select_auth_module(line, edition, auth_module_arg)
+    runtime_hook = write_runtime_profile_hook(
+        exe_name=exe_name,
+        version=version,
+        line=line,
+        edition=edition,
+        auth_module=auth_module,
+        dry_run=dry_run,
+    )
     if bundle_browser and (not dry_run):
         ensure_playwright_chromium_ready()
     started_at = run_pyinstaller(
         spec_file,
         exe_name,
+        version=version,
+        line=line,
+        edition=edition,
+        auth_module=auth_module,
         clean=clean,
         dry_run=dry_run,
         bundle_browser=bundle_browser,
+        runtime_hook=runtime_hook,
     )
 
     final_artifact = DIST_DIR / f"{exe_name}.exe"
@@ -311,6 +435,10 @@ def main() -> int:
     )
     parser.add_argument("--spec", default="", help="対象spec（未指定時は自動判定）")
     parser.add_argument("--app-name", default="", help="成果物ベース名（未指定時は商品名）")
+    parser.add_argument("--line", default="", help="製品ライン（aqua / clearism）")
+    parser.add_argument("--edition", default="", help="エディション（GOLD / SILVER / BRONZE / DEMO）")
+    parser.add_argument("--auth-module", default="", help="認証モジュール（auth_clear / auth_master）")
+    parser.add_argument("--no-version-suffix", action="store_true", help="成果物名に _vX.Y.Z を付けない")
     parser.add_argument("--version-file", default=str(VERSION_FILE), help="VERSION.txt のパス")
     parser.add_argument("--changelog", default=str(CHANGELOG_FILE), help="CHANGELOG のパス")
     parser.add_argument("--clean", action="store_true", help="PyInstaller を clean build で実行する")
@@ -337,6 +465,10 @@ def main() -> int:
             dry_run=args.dry_run,
             bundle_browser=bool(args.bundle_browser),
             app_name_arg=args.app_name,
+            line_arg=args.line,
+            edition_arg=args.edition,
+            auth_module_arg=args.auth_module,
+            include_version_suffix=(not args.no_version_suffix),
         )
         return 0
     except Exception as exc:

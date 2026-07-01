@@ -1,12 +1,14 @@
 # -*- mode: python ; coding: utf-8 -*-
 
 import importlib.util
+import json
 import os
 import sys
 from pathlib import Path
 from typing import List, Tuple
 
 APP_EXE_NAME = os.environ.get("APP_EXE_NAME", "AQUA EDGE AI")
+APP_RUNTIME_HOOK = os.environ.get("APP_RUNTIME_HOOK", "").strip()
 BUNDLE_PLAYWRIGHT_BROWSER = os.environ.get("BUNDLE_PLAYWRIGHT_BROWSER", "0").strip().lower() in {"1", "true", "yes", "on"}
 PLAYWRIGHT_BUNDLE_DIR_PREFIXES = (
     "chromium-",
@@ -123,15 +125,40 @@ def _collect_playwright_browser_datas() -> List[Tuple[str, str]]:
 _playwright_datas = _collect_playwright_browser_datas()
 
 
+def _write_runtime_profile_hook(path: Path) -> None:
+    path.parent.mkdir(parents=True, exist_ok=True)
+    profile = {
+        "APP_LINE": os.environ.get("APP_LINE", ""),
+        "APP_EDITION": os.environ.get("APP_EDITION", ""),
+        "APP_AUTH_MODULE": os.environ.get("APP_AUTH_MODULE", ""),
+        "APP_VERSION": os.environ.get("APP_VERSION", ""),
+    }
+    lines = ["import os"]
+    for key, value in profile.items():
+        if value:
+            lines.append(f"os.environ[{json.dumps(key)}] = {json.dumps(value)}")
+    lines.append("")
+    path.write_text("\n".join(lines), encoding="utf-8")
+
+
+_runtime_hooks = []
+if APP_RUNTIME_HOOK:
+    _runtime_hook_path = Path(APP_RUNTIME_HOOK).resolve()
+    if not _runtime_hook_path.exists():
+        _write_runtime_profile_hook(_runtime_hook_path)
+    _runtime_hooks.append(str(_runtime_hook_path))
+    print(f"[spec] runtime hook: {_runtime_hook_path}")
+
+
 a = Analysis(
     ["main.py"],
     pathex=[],
     binaries=[],
     datas=_playwright_datas,
-    hiddenimports=[],
+    hiddenimports=["auth_clear", "auth_master"],
     hookspath=[],
     hooksconfig={},
-    runtime_hooks=[],
+    runtime_hooks=_runtime_hooks,
     excludes=[],
     noarchive=False,
     optimize=0,

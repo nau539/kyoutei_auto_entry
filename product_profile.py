@@ -21,8 +21,6 @@ EDITIONS: dict[str, dict[str, Any]] = {
         "log_basename": "aqua_edge_ai_gold",
         "max_bet_types": 3,
         "require_auth": True,
-        # 顧客向けは AQUA_EDGE_AI 認証シート(auth_clear)。
-        "auth_module": "auth_clear",
         # (light, dark) のアクセント。アクア基調にゴールドを重ねる。
         "tier_accent": ("#C8A22B", "#F4D469"),
         "tier_label": "GOLD",
@@ -33,7 +31,6 @@ EDITIONS: dict[str, dict[str, Any]] = {
         "log_basename": "aqua_edge_ai_silver",
         "max_bet_types": 2,
         "require_auth": True,
-        "auth_module": "auth_clear",
         "tier_accent": ("#7C879A", "#C5D6E2"),
         "tier_label": "SILVER",
     },
@@ -43,7 +40,6 @@ EDITIONS: dict[str, dict[str, Any]] = {
         "log_basename": "aqua_edge_ai_bronze",
         "max_bet_types": 1,
         "require_auth": True,
-        "auth_module": "auth_clear",
         "tier_accent": ("#A9692E", "#DFA468"),
         "tier_label": "BRONZE",
     },
@@ -64,8 +60,10 @@ DEFAULT_EDITION = "GOLD"
 # ---------------------------------------------------------------------------
 # 製品ライン（配信チャンネル・グレードの意味・配信戦略が異なる）
 #   - aqua      : 自分/他社向け。GOLD/SILVER/BRONZE は「選べる券種数」を制限。ch1521。
+#                 認証は master シート(auth_master)。
 #   - clearism  : クリアイズム様向け。前の3連複(stable3f)。GOLD/SILVER/BRONZE は
 #                 「選べる日区分(モーニング/日中/ナイター)数」を制限。ch1490。
+#                 認証は AQUA_EDGE_AI シート(auth_clear)。
 # ---------------------------------------------------------------------------
 PRODUCT_LINES: dict[str, dict[str, Any]] = {
     "aqua": {
@@ -75,6 +73,7 @@ PRODUCT_LINES: dict[str, dict[str, Any]] = {
         "channel_id": "1521839594860187649",
         "dispatch_strategy": "aqua3",
         "webhook_config": "configs/local/discord_webhook_aqua.txt",
+        "auth_module": "auth_master",
     },
     "clearism": {
         "brand": "AQUA EDGE AI CLEARISM",
@@ -83,6 +82,7 @@ PRODUCT_LINES: dict[str, dict[str, Any]] = {
         "channel_id": "1490297331839664290",
         "dispatch_strategy": "stable3f",
         "webhook_config": "configs/local/discord_webhook_clearism.txt",
+        "auth_module": "auth_clear",
     },
 }
 DEFAULT_LINE = "aqua"
@@ -205,13 +205,16 @@ def edition_requires_auth(edition: str | None = None) -> bool:
     return bool(edition_profile(edition).get("require_auth", True))
 
 
-def edition_auth_module(edition: str | None = None) -> str:
-    """エディションが使う認証モジュール名。
+def edition_auth_module(edition: str | None = None, line: str | None = None) -> str:
+    """エディションと製品ラインが使う認証モジュール名。"""
+    override = str(os.environ.get("APP_AUTH_MODULE", "") or "").strip()
+    if override:
+        return override
 
-    GOLD/SILVER/BRONZE は auth_clear（顧客向け AQUA_EDGE_AI シート）、
-    DEMO(KYOUTEI) は auth_master（自分用 master シート）。
-    """
-    return str(edition_profile(edition).get("auth_module", "auth_clear"))
+    ed = str(edition or detect_edition()).upper()
+    if ed == "DEMO":
+        return "auth_master"
+    return str(line_profile(line).get("auth_module", "auth_clear"))
 
 
 def tier_accent(edition: str | None = None) -> tuple[str, str]:

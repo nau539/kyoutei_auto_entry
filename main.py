@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import logging
+import os
 from pathlib import Path
 import re
 import sys
@@ -24,6 +25,9 @@ def setup_logging() -> None:
 
 
 def resolve_runtime_version() -> str:
+    env_version = str(os.environ.get("APP_VERSION", "") or "").strip()
+    if env_version:
+        return env_version
     if getattr(sys, "frozen", False):
         exe_name = Path(sys.executable).stem
         match = re.search(r"_v([0-9A-Za-z._-]+)$", exe_name)

@@ -14,7 +14,7 @@
 - 商品名は AQUA EDGE AI
 - BRONZE、SILVER、GOLD などのプラン区分や利用枠選択は使わない
 - 中央投票の主対象は競艇へ置き換え済み
-- 利用者ID認証は auth_clear.py を使い、AQUA_EDGE_AI シートを参照する
+- 利用者ID認証は、クリアイズム様向けが auth_clear.py、通常向けが auth_master.py を使う
 - 受信側は JSON だけでなく、`kyoutei_bunseki` のプレーンテキスト通知も読める
 - 候補通知は `pre_race_candidates` として扱い、ログ反映とブラウザ起動制御だけを行う
 - 最終通知は `entry_tickets` として扱い、中央発注キューへ投入する
@@ -70,17 +70,16 @@ python3 -m unittest tests.test_payload_parser tests.test_config tests.test_produ
 
 ## ビルド
 
-```bash
-cd /home/user/src/kyoutei/kyoutei_auto_entry
-python3 build_release.py --spec kyoutei_auto_entry.spec --clean
-```
+クリアイズム様向けは、AQUA EDGE AI_GOLD / AQUA EDGE AI_SILVER / AQUA EDGE AI_BRONZE の3本を作る。通常向けは kyoutei_auto_trade.exe を作る。
+
+まとめて作る場合は、bash build_all_lines.sh を実行する。
 
 ## Distribution Profile
 
 - Distribution Required: yes
 - Package Type: python-exe
 - Version Source: `VERSION.txt`
-- Artifact Naming: `NAME_vX.Y.Z.exe`
+- Artifact Naming: クリアイズム様向けは NAME_vX.Y.Z.exe、通常向けは kyoutei_auto_trade.exe
 - Spec: `kyoutei_auto_entry.spec`
 - Build Script: `build_release.py`
 

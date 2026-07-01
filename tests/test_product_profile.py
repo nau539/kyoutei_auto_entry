@@ -30,12 +30,13 @@ class ProductProfileTests(unittest.TestCase):
         self.assertEqual(max_bet_types("SILVER"), 2)
         self.assertEqual(max_bet_types("BRONZE"), 1)
         self.assertEqual(max_bet_types("DEMO"), 3)
-        # 全エディションが認証する。顧客向けは auth_clear、自分用デモは auth_master。
+        # 全エディションが認証する。クリアイズム様向けは auth_clear、それ以外は auth_master。
         self.assertTrue(edition_requires_auth("GOLD"))
         self.assertTrue(edition_requires_auth("DEMO"))
-        self.assertEqual(edition_auth_module("GOLD"), "auth_clear")
-        self.assertEqual(edition_auth_module("SILVER"), "auth_clear")
-        self.assertEqual(edition_auth_module("BRONZE"), "auth_clear")
+        self.assertEqual(edition_auth_module("GOLD", "clearism"), "auth_clear")
+        self.assertEqual(edition_auth_module("SILVER", "clearism"), "auth_clear")
+        self.assertEqual(edition_auth_module("BRONZE", "clearism"), "auth_clear")
+        self.assertEqual(edition_auth_module("BRONZE", "aqua"), "auth_master")
         self.assertEqual(edition_auth_module("DEMO"), "auth_master")
         self.assertEqual(edition_profile("DEMO")["exe_basename"], "KYOUTEI")
         self.assertEqual(edition_profile("GOLD")["exe_basename"], "AQUA EDGE AI_GOLD")
@@ -80,4 +81,3 @@ class ProductProfileTests(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
-

@@ -741,6 +741,23 @@
 - Open items:
   - Cドライブ側の作業フォルダは Git リポジトリではないため、commit と push は未実施。
 
+## 2026-07-01
+- Task: クリアイズム様向け配布名変更、通常向け固定名化、認証先固定、EXE再作成
+- Summary: クリアイズム様向けは配布名から CLEARISM を外し、AQUA EDGE AI_GOLD_v0.3.28.exe、AQUA EDGE AI_SILVER_v0.3.28.exe、AQUA EDGE AI_BRONZE_v0.3.28.exe として作成した。通常向けは kyoutei_auto_trade.exe として作成した。製品ライン、エディション、認証先、バージョンはPyInstallerのruntime hookでEXEへ固定し、クリアイズム様向けは auth_clear.py、通常向けは auth_master.py を使うようにした。
+- Changed files: product_profile.py, build_release.py, kyoutei_auto_entry.spec, main.py, ui/main_window.py, build_all_lines.sh, build_all_editions.sh, tests/test_build_release.py, tests/test_product_profile.py, README.md, docs/PROJECT_CONTEXT.md, docs/CHANGELOG_CUSTOMER.md, docs/WORKLOG.md, docs/LEARNINGS.md
+- Verification:
+  - python -m py_compile main.py product_profile.py build_release.py ui\main_window.py tests\test_build_release.py tests\test_product_profile.py
+  - python -m unittest discover -s tests -p test_*.py -q
+  - python build_release.py --spec kyoutei_auto_entry.spec --line clearism --edition BRONZE --auth-module auth_clear --app-name "AQUA EDGE AI_BRONZE" --dry-run
+  - python build_release.py --spec kyoutei_auto_entry.spec --line aqua --edition BRONZE --auth-module auth_master --app-name kyoutei_auto_trade --no-version-suffix --dry-run
+  - python build_release.py --spec kyoutei_auto_entry.spec --line clearism --edition GOLD --auth-module auth_clear --app-name "AQUA EDGE AI_GOLD" --clean
+  - python build_release.py --spec kyoutei_auto_entry.spec --line clearism --edition SILVER --auth-module auth_clear --app-name "AQUA EDGE AI_SILVER" --clean
+  - python build_release.py --spec kyoutei_auto_entry.spec --line clearism --edition BRONZE --auth-module auth_clear --app-name "AQUA EDGE AI_BRONZE" --clean
+  - python build_release.py --spec kyoutei_auto_entry.spec --line aqua --edition BRONZE --auth-module auth_master --app-name kyoutei_auto_trade --no-version-suffix --clean
+  - dist内にAQUA EDGE AI_GOLD_v0.3.28.exe、AQUA EDGE AI_SILVER_v0.3.28.exe、AQUA EDGE AI_BRONZE_v0.3.28.exe、kyoutei_auto_trade.exeが存在し、AQUA EDGE AI CLEARISM付きのv0.3.28成果物が残っていないことを確認
+- Open items:
+  - 実機起動後の認証画面で、クリアイズム様向けがauth_clear、通常向けがauth_masterを参照することを画面操作で最終確認する。
+
 ## 2026-06-26
 - Task: AQUA EDGE AI からプラン、利用枠、固定版分岐を削除
 - Summary: BRONZE、SILVER、GOLD のプラン表示、利用枠選択、固定プラン版や体験版のビルド分岐を削除した。Discord通知は利用枠で見送らず、AQUA EDGE AI としてそのまま受信する形に整理した。未使用になった旧ダッシュボードと確認ダイアログも削除した。

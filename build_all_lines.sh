@@ -1,12 +1,15 @@
 #!/usr/bin/env bash
 set -e
 cd "$(dirname "$0")"
-for ed in \
-  "AQUA EDGE AI_GOLD" "AQUA EDGE AI_SILVER" "AQUA EDGE AI_BRONZE" \
-  "AQUA EDGE AI CLEARISM_GOLD" "AQUA EDGE AI CLEARISM_SILVER" "AQUA EDGE AI CLEARISM_BRONZE" \
-  "KYOUTEI"; do
-  echo "=== BUILD: $ed ==="
-  python build_release.py --spec kyoutei_auto_entry.spec --app-name "$ed" --clean
+
+for ed in GOLD SILVER BRONZE; do
+  app_name="AQUA EDGE AI_${ed}"
+  echo "=== BUILD CLEARISM: $app_name ==="
+  python build_release.py --spec kyoutei_auto_entry.spec --line clearism --edition "$ed" --auth-module auth_clear --app-name "$app_name" --clean
 done
-echo "=== ALL 7 BUILDS DONE ==="
-ls -la dist/*v0.3.28.exe
+
+echo "=== BUILD MASTER: kyoutei_auto_trade ==="
+python build_release.py --spec kyoutei_auto_entry.spec --line aqua --edition BRONZE --auth-module auth_master --app-name kyoutei_auto_trade --no-version-suffix --clean
+
+echo "=== ALL 4 BUILDS DONE ==="
+ls -la dist/AQUA\ EDGE\ AI_*v0.3.28.exe dist/kyoutei_auto_trade.exe

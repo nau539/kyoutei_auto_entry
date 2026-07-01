@@ -14,6 +14,10 @@ from build_release import (
 class BuildReleaseTests(unittest.TestCase):
     def test_build_exe_name(self):
         self.assertEqual(build_exe_name("AQUA EDGE AI", "0.3.1"), "AQUA EDGE AI_v0.3.1")
+        self.assertEqual(
+            build_exe_name("kyoutei_auto_trade", "0.3.1", include_version=False),
+            "kyoutei_auto_trade",
+        )
 
     def test_infer_app_basename_defaults_to_product_name(self):
         # 既定エディション(GOLD)の EXE ベース名。--app-name 指定時はそちらを優先。
@@ -21,6 +25,10 @@ class BuildReleaseTests(unittest.TestCase):
         self.assertEqual(
             infer_app_basename(Path("kyoutei_auto_entry.spec"), "AQUA EDGE AI_SILVER"),
             "AQUA EDGE AI_SILVER",
+        )
+        self.assertEqual(
+            infer_app_basename(Path("kyoutei_auto_entry.spec"), "kyoutei_auto_trade.exe"),
+            "kyoutei_auto_trade",
         )
 
     def test_determine_artifact_suffix_keeps_numeric_version_suffix_from_becoming_extension(self):
