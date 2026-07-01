@@ -172,6 +172,8 @@ def infer_line_from_app_basename(app_basename: str) -> str:
 
 def infer_edition_from_app_basename(app_basename: str) -> str:
     text = str(app_basename or "").upper()
+    if "KYOUTEI_AUTO_TRADE" in text:
+        return "TRADE"
     if "KYOUTEI" in text:
         return "DEMO"
     for edition in ("GOLD", "SILVER", "BRONZE"):
@@ -436,7 +438,7 @@ def main() -> int:
     parser.add_argument("--spec", default="", help="対象spec（未指定時は自動判定）")
     parser.add_argument("--app-name", default="", help="成果物ベース名（未指定時は商品名）")
     parser.add_argument("--line", default="", help="製品ライン（aqua / clearism）")
-    parser.add_argument("--edition", default="", help="エディション（GOLD / SILVER / BRONZE / DEMO）")
+    parser.add_argument("--edition", default="", help="エディション（GOLD / SILVER / BRONZE / TRADE / DEMO）")
     parser.add_argument("--auth-module", default="", help="認証モジュール（auth_clear / auth_master）")
     parser.add_argument("--no-version-suffix", action="store_true", help="成果物名に _vX.Y.Z を付けない")
     parser.add_argument("--version-file", default=str(VERSION_FILE), help="VERSION.txt のパス")

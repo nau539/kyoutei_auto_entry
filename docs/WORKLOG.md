@@ -771,6 +771,22 @@
 - Open items:
   - 実機起動後の画面表示で、BRONZEバッジが出ずGOLD相当の最大3券種になっていることを一度確認する。
 
+## 2026-07-01
+- Task: kyoutei_auto_tradeの名称統一とグレード表示削除
+- Summary: 通常向けラインの表示名とログ名を kyoutei_auto_trade に変更した。通常向け専用のTRADEエディションを追加し、最大3券種の内容は維持しつつGOLDやBRONZEなどのグレードバッジと設定見出しのグレード表記を出さないようにした。AQUA EDGE AI 表記はクリアイズム様向けとして残した。
+- Changed files: product_profile.py, build_release.py, ui/main_window.py, ui/views/dashboard_view.py, build_all_lines.sh, tests/test_product_profile.py, tests/test_build_release.py, README.md, docs/PROJECT_CONTEXT.md, docs/CHANGELOG_CUSTOMER.md, docs/WORKLOG.md, docs/LEARNINGS.md
+- Verification:
+  - python -m py_compile product_profile.py build_release.py ui\main_window.py ui\views\dashboard_view.py tests\test_product_profile.py tests\test_build_release.py
+  - python -m unittest discover -s tests -p test_product_profile.py -q
+  - python -m unittest discover -s tests -p test_build_release.py -q
+  - python -m unittest discover -s tests -p test_*.py -q
+  - python build_release.py --spec kyoutei_auto_entry.spec --line aqua --edition TRADE --auth-module auth_master --app-name kyoutei_auto_trade --no-version-suffix --dry-run
+  - python build_release.py --spec kyoutei_auto_entry.spec --line aqua --edition TRADE --auth-module auth_master --app-name kyoutei_auto_trade --no-version-suffix --clean
+  - build/runtime_hooks/kyoutei_auto_trade_runtime_profile.py が APP_EDITION=TRADE、APP_AUTH_MODULE=auth_master であることを確認
+  - product_profileの評価で表示名kyoutei_auto_trade、tier_label空、最大3件になることを確認
+- Open items:
+  - 実機起動後の画面で、サイドバーにGOLDバッジが出ないことを目視確認する。
+
 ## 2026-06-26
 - Task: AQUA EDGE AI からプラン、利用枠、固定版分岐を削除
 - Summary: BRONZE、SILVER、GOLD のプラン表示、利用枠選択、固定プラン版や体験版のビルド分岐を削除した。Discord通知は利用枠で見送らず、AQUA EDGE AI としてそのまま受信する形に整理した。未使用になった旧ダッシュボードと確認ダイアログも削除した。

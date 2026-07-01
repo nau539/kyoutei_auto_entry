@@ -169,16 +169,19 @@ class AutoEntryApp(ctk.CTk):
         )
         self._sidebar_subtitle.pack(padx=16, pady=(0, 6))
 
-        # グレード（GOLD/SILVER/BRONZE/DEMO）バッジ。アクア基調にグレード色を重ねる。
-        self._tier_badge = ctk.CTkLabel(
-            self._sidebar,
-            text=f"  {tier_label()}  ",
-            font=FONT_SMALL,
-            corner_radius=8,
-            fg_color=tier_accent(),
-            text_color=("#1A1A1A", "#1A1A1A"),
-        )
-        self._tier_badge.pack(padx=16, pady=(0, 18))
+        tier = tier_label()
+        if tier:
+            self._tier_badge = ctk.CTkLabel(
+                self._sidebar,
+                text=f"  {tier}  ",
+                font=FONT_SMALL,
+                corner_radius=8,
+                fg_color=tier_accent(),
+                text_color=("#1A1A1A", "#1A1A1A"),
+            )
+            self._tier_badge.pack(padx=16, pady=(0, 18))
+        else:
+            self._sidebar_subtitle.pack_configure(pady=(0, 18))
 
         auth_wrap = ctk.CTkFrame(self._sidebar, fg_color="transparent")
         auth_wrap.pack(fill="x", padx=12, pady=(0, 12))

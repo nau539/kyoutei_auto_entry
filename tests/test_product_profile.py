@@ -1,9 +1,11 @@
 import unittest
+from unittest import mock
 
 from product_profile import (
     app_palette,
     clamp_enabled_bet_types,
     default_enabled_bet_types,
+    edition_name,
     edition_auth_module,
     edition_profile,
     edition_requires_auth,
@@ -14,22 +16,27 @@ from product_profile import (
     normalize_tool_slot,
     runtime_log_basename,
     runtime_product_name,
+    tier_label,
     tool_slot_hour,
     tool_slot_label,
 )
 
 
 class ProductProfileTests(unittest.TestCase):
-    def test_default_edition_is_gold_branded_aqua_product(self):
-        # 既定(未指定/未凍結)は GOLD エディション。製品ラインは AQUA EDGE AI。
-        self.assertEqual(runtime_product_name(), "AQUA EDGE AI GOLD")
-        self.assertEqual(runtime_log_basename(), "aqua_edge_ai_gold")
+    def test_default_line_is_kyoutei_auto_trade_without_tier_badge(self):
+        self.assertEqual(runtime_product_name(), "kyoutei_auto_trade")
+        self.assertEqual(runtime_log_basename(), "kyoutei_auto_trade")
+        self.assertEqual(tier_label(), "")
+        self.assertEqual(edition_name("GOLD", "clearism"), "AQUA EDGE AI CLEARISM GOLD")
+        with mock.patch.dict("os.environ", {"APP_LINE": "clearism"}, clear=False):
+            self.assertEqual(tier_label("GOLD"), "GOLD")
 
     def test_edition_caps_and_auth(self):
         self.assertEqual(max_bet_types("GOLD"), 3)
         self.assertEqual(max_bet_types("SILVER"), 2)
         self.assertEqual(max_bet_types("BRONZE"), 1)
         self.assertEqual(max_bet_types("DEMO"), 3)
+        self.assertEqual(max_bet_types("TRADE"), 3)
         # 全エディションが認証する。クリアイズム様向けは auth_clear、それ以外は auth_master。
         self.assertTrue(edition_requires_auth("GOLD"))
         self.assertTrue(edition_requires_auth("DEMO"))
@@ -37,6 +44,7 @@ class ProductProfileTests(unittest.TestCase):
         self.assertEqual(edition_auth_module("SILVER", "clearism"), "auth_clear")
         self.assertEqual(edition_auth_module("BRONZE", "clearism"), "auth_clear")
         self.assertEqual(edition_auth_module("BRONZE", "aqua"), "auth_master")
+        self.assertEqual(edition_auth_module("TRADE", "aqua"), "auth_master")
         self.assertEqual(edition_auth_module("DEMO"), "auth_master")
         self.assertEqual(edition_profile("DEMO")["exe_basename"], "KYOUTEI")
         self.assertEqual(edition_profile("GOLD")["exe_basename"], "AQUA EDGE AI_GOLD")

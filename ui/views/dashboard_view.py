@@ -195,7 +195,9 @@ class DashboardView(ctk.CTkFrame):
         self._sel_items = list(DAYPARTS) if self._sel_axis == "daypart" else list(BET_TYPES)
         axis_word = "日区分" if self._sel_axis == "daypart" else "券種"
         cap = max_selections()
-        bet_card = CardFrame(scroll, title=f"通知{axis_word}（{tier_label()}：最大{cap}）")
+        tier = tier_label()
+        cap_title = f"{tier}：最大{cap}" if tier else f"最大{cap}"
+        bet_card = CardFrame(scroll, title=f"通知{axis_word}（{cap_title}）")
         bet_card.pack(fill="x", pady=(0, 12))
         self._bet_type_vars: dict[str, ctk.BooleanVar] = {}
         self._bet_type_boxes: dict[str, ctk.CTkCheckBox] = {}

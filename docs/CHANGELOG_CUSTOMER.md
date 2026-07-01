@@ -9,7 +9,7 @@
 - 選択した日区分（または券種）の通知だけを取り込みます。
 - クリアイズム様向けの配布名から CLEARISM 表記を外し、通常向けは kyoutei_auto_trade.exe として作成するようにしました。
 - 認証先はクリアイズム様向けが auth_clear.py、通常向けが auth_master.py になるよう固定しました。
-- 通常向けの kyoutei_auto_trade.exe はGOLD相当の内容で作成し、BRONZE表示にならないようにしました。
+- 通常向けの kyoutei_auto_trade.exe は3券種対応の内容で作成し、GOLDやBRONZEなどのグレード表示を出さないようにしました。
 
 ## v0.3.27 - 2026-07-01
 - GOLD / SILVER / BRONZE の3エディションを用意しました。エディションごとに同時に選べる券種数の上限が変わります（GOLD=最大3種・SILVER=最大2種・BRONZE=最大1種）。

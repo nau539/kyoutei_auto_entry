@@ -10,7 +10,8 @@ BET_TYPES: tuple[str, ...] = ("2連複", "3連複", "3連単")
 
 # ---------------------------------------------------------------------------
 # エディション定義
-#   - GOLD/SILVER/BRONZE は「同時に選べる券種数の上限」で差別化する。
+#   - GOLD/SILVER/BRONZE はクリアイズム様向けの選択上限。
+#   - TRADE は通常向け。最大3券種でグレード表示はしない。
 #   - DEMO(KYOUTEI) は自分用。認証なし・全券種選択可。
 #   - テーマは現行の水色(アクア)を基調に、グレード色をアクセントとして重ねる。
 # ---------------------------------------------------------------------------
@@ -54,12 +55,21 @@ EDITIONS: dict[str, dict[str, Any]] = {
         "tier_accent": ("#008BC7", "#4FD8FF"),
         "tier_label": "DEMO",
     },
+    "TRADE": {
+        "name": "kyoutei_auto_trade",
+        "exe_basename": "kyoutei_auto_trade",
+        "log_basename": "kyoutei_auto_trade",
+        "max_bet_types": 3,
+        "require_auth": True,
+        "tier_accent": ("#008BC7", "#4FD8FF"),
+        "tier_label": "",
+    },
 }
 DEFAULT_EDITION = "GOLD"
 
 # ---------------------------------------------------------------------------
 # 製品ライン（配信チャンネル・グレードの意味・配信戦略が異なる）
-#   - aqua      : 自分/他社向け。GOLD/SILVER/BRONZE は「選べる券種数」を制限。ch1521。
+#   - aqua      : 通常向け。GOLD相当の内容を kyoutei_auto_trade として配布。ch1521。
 #                 認証は master シート(auth_master)。
 #   - clearism  : クリアイズム様向け。前の3連複(stable3f)。GOLD/SILVER/BRONZE は
 #                 「選べる日区分(モーニング/日中/ナイター)数」を制限。ch1490。
@@ -67,13 +77,14 @@ DEFAULT_EDITION = "GOLD"
 # ---------------------------------------------------------------------------
 PRODUCT_LINES: dict[str, dict[str, Any]] = {
     "aqua": {
-        "brand": "AQUA EDGE AI",
-        "log_brand": "aqua_edge_ai",
+        "brand": "kyoutei_auto_trade",
+        "log_brand": "kyoutei_auto_trade",
         "cap_axis": "bet_type",
         "channel_id": "1521839594860187649",
         "dispatch_strategy": "aqua3",
         "webhook_config": "configs/local/discord_webhook_aqua.txt",
         "auth_module": "auth_master",
+        "show_tier": False,
     },
     "clearism": {
         "brand": "AQUA EDGE AI CLEARISM",
@@ -83,6 +94,7 @@ PRODUCT_LINES: dict[str, dict[str, Any]] = {
         "dispatch_strategy": "stable3f",
         "webhook_config": "configs/local/discord_webhook_clearism.txt",
         "auth_module": "auth_clear",
+        "show_tier": True,
     },
 }
 DEFAULT_LINE = "aqua"
@@ -137,6 +149,10 @@ def line_dispatch_strategy(line: str | None = None) -> str:
     return str(line_profile(line).get("dispatch_strategy", "aqua3"))
 
 
+def line_shows_tier(line: str | None = None) -> bool:
+    return bool(line_profile(line).get("show_tier", True))
+
+
 def detect_edition() -> str:
     """実行中エディションを判定する。
 
@@ -150,6 +166,8 @@ def detect_edition() -> str:
     try:
         if getattr(sys, "frozen", False):
             stem = Path(sys.executable).stem.upper()
+            if "KYOUTEI_AUTO_TRADE" in stem:
+                return "TRADE"
             if "KYOUTEI" in stem:
                 return "DEMO"
             for ed in ("GOLD", "SILVER", "BRONZE"):
@@ -169,21 +187,30 @@ def edition_name(edition: str | None = None, line: str | None = None) -> str:
     ed = str(edition or detect_edition()).upper()
     if ed == "DEMO":
         return "KYOUTEI"
-    return f"{line_profile(line)['brand']} {ed}"
+    profile = line_profile(line)
+    if not line_shows_tier(line):
+        return str(profile["brand"])
+    return f"{profile['brand']} {ed}"
 
 
 def edition_exe_basename(edition: str | None = None, line: str | None = None) -> str:
     ed = str(edition or detect_edition()).upper()
     if ed == "DEMO":
         return "KYOUTEI"
-    return f"{line_profile(line)['brand']}_{ed}"
+    profile = line_profile(line)
+    if not line_shows_tier(line):
+        return str(profile["brand"])
+    return f"{profile['brand']}_{ed}"
 
 
 def edition_log_basename(edition: str | None = None, line: str | None = None) -> str:
     ed = str(edition or detect_edition()).upper()
     if ed == "DEMO":
         return "kyoutei"
-    return f"{line_profile(line)['log_brand']}_{ed.lower()}"
+    profile = line_profile(line)
+    if not line_shows_tier(line):
+        return str(profile["log_brand"])
+    return f"{profile['log_brand']}_{ed.lower()}"
 
 
 PRODUCT_NAME = edition_name()
@@ -223,6 +250,8 @@ def tier_accent(edition: str | None = None) -> tuple[str, str]:
 
 
 def tier_label(edition: str | None = None) -> str:
+    if not line_shows_tier():
+        return ""
     return str(edition_profile(edition).get("tier_label", ""))
 
 

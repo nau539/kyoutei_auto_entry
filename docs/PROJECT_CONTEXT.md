@@ -11,7 +11,7 @@
 ## 現在の状態
 
 - リポジトリ構成は `keirin_auto_entry` を土台にコピーして作成した
-- 商品名は AQUA EDGE AI
+- 通常向けの商品名は kyoutei_auto_trade、クリアイズム様向けの商品名は AQUA EDGE AI
 - BRONZE、SILVER、GOLD などのプラン区分や利用枠選択は使わない
 - 中央投票の主対象は競艇へ置き換え済み
 - 利用者ID認証は、クリアイズム様向けが auth_clear.py、通常向けが auth_master.py を使う
@@ -70,7 +70,7 @@ python3 -m unittest tests.test_payload_parser tests.test_config tests.test_produ
 
 ## ビルド
 
-クリアイズム様向けは、AQUA EDGE AI_GOLD / AQUA EDGE AI_SILVER / AQUA EDGE AI_BRONZE の3本を作る。通常向けはGOLD相当の kyoutei_auto_trade.exe を作る。
+クリアイズム様向けは、AQUA EDGE AI_GOLD / AQUA EDGE AI_SILVER / AQUA EDGE AI_BRONZE の3本を作る。通常向けは3券種対応でグレード表示なしの kyoutei_auto_trade.exe を作る。
 
 まとめて作る場合は、bash build_all_lines.sh を実行する。
 
